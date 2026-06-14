@@ -1,0 +1,14 @@
+# dependencies
+node_modules
+
+# secrets / local env (Postgres creds + RAGFlow beta token live here)
+.env
+.env.*
+!.env.example
+
+# build / runtime output
+dist
+*.log
+
+# misc
+.DS_Store

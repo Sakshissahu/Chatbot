@@ -1,0 +1,19 @@
+# dependencies
+node_modules
+
+# secrets / local env (contains the RAGFlow beta token)
+.env
+.env.*
+!.env.example
+
+# build output
+dist
+dist-ssr
+
+# screenshot harness output
+.screens
+
+# misc
+*.local
+.DS_Store
+__pycache__

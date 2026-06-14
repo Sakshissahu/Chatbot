@@ -1,0 +1,131 @@
+================================================================
+  IB GROUP RAGFLOW CHATBOT  -  STARTUP & OPERATIONS GUIDE
+================================================================
+  Everything you need to start, stop, check, and fix the bot.
+  All commands are PowerShell. Copy-paste them as-is.
+================================================================
+
+
+----------------------------------------------------------------
+ 0. THE TWO FOLDERS (don't mix them up)
+----------------------------------------------------------------
+  DOCKER commands run from:
+     C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\docker
+
+  PYTHON scripts:
+     - load_keys.py          -> run from ...\BDchatbot\ragflow
+     - ingest_new_docs.py    -> run from ...\BDchatbot
+
+  Login to the web UI:
+     URL:      http://localhost
+     Email:    admin@ibgroup.co.in
+     Password: IBDocs@2026
+
+
+----------------------------------------------------------------
+ 1. START THE PROJECT (after reboot, or if stopped)
+----------------------------------------------------------------
+  Step 1 - make sure Docker Desktop is open and running first.
+
+  Step 2 - start the containers:
+
+     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\docker
+     docker compose -f docker-compose.yml up -d
+
+  Step 3 - WAIT 1-2 MINUTES. RAGFlow needs time to boot.
+     Opening http://localhost too early gives a 502 or
+     "network anomaly" error - that just means "still starting."
+
+  Step 4 - open the bot:
+     http://localhost   (log in with the details above)
+
+
+----------------------------------------------------------------
+ 2. CHECK STATUS  (is it up? is it healthy?)
+----------------------------------------------------------------
+  See all running containers:
+
+     docker ps
+
+  You want to see:  docker-ragflow-cpu-1   Up
+  (plus mysql, es01, minio, redis, tei-cpu - all "Up/healthy")
+
+
+----------------------------------------------------------------
+ 3. IF YOU GET A 502 / "network anomaly" / page won't load
+----------------------------------------------------------------
+  Usually it's just still booting. If it persists after 2 min:
+
+  a) Check the backend logs for the "started" line or errors:
+
+     docker logs docker-ragflow-cpu-1 --tail 50
+
+     Look for:  "Running on http://0.0.0.0:9380"  (= ready)
+     If you see it still loading models -> wait longer.
+     If you see crash/errors -> copy them out for help.
+
+  b) Confirm the container didn't crash or restart:
+
+     docker ps -a
+
+     If docker-ragflow-cpu-1 shows "Restarting" or "Exited",
+     something failed - check the logs above.
+
+  c) Last resort - restart just the app container:
+
+     docker restart docker-ragflow-cpu-1
+     (then wait 1-2 min again)
+
+
+----------------------------------------------------------------
+ 4. STOP THE PROJECT (frees memory, KEEPS all data)
+----------------------------------------------------------------
+     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\docker
+     docker compose -f docker-compose.yml stop
+
+
+----------------------------------------------------------------
+ 5. *** NEVER RUN THIS ***  (it deletes all your data)
+----------------------------------------------------------------
+     docker compose down -v       <-- the -v WIPES docs, login,
+                                      parsed chunks. DO NOT USE.
+
+  Plain "stop" (section 4) is always the safe way to shut down.
+
+
+----------------------------------------------------------------
+ 6. ADD / UPDATE API KEYS  (run from ...\BDchatbot\ragflow)
+----------------------------------------------------------------
+  Only needed when a key changes or you add a provider.
+  Make sure RAGFlow is UP first (section 1).
+
+     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow
+     python load_keys.py
+
+  IMPORTANT: in load_keys.py, keep  CHAT_NAME = ""  so the script
+  only SETS KEYS and does NOT repoint the assistant. (Repointing
+  via the API is what caused the 'model_type unsupported' error.)
+
+
+----------------------------------------------------------------
+ 7. ADD NEW DOCUMENTS  (run from ...\BDchatbot)
+----------------------------------------------------------------
+  Put new files in:  ...\BDchatbot\ragflow\IBDOCS
+  Then:
+
+     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot
+     python ingest_new_docs.py
+
+  It uploads + parses only the new files (safe to re-run).
+
+
+----------------------------------------------------------------
+ 8. QUICK REFERENCE
+----------------------------------------------------------------
+  Start:     cd ...\ragflow\docker  then  docker compose -f docker-compose.yml up -d
+  Status:    docker ps
+  Logs:      docker logs docker-ragflow-cpu-1 --tail 50
+  Stop:      cd ...\ragflow\docker  then  docker compose -f docker-compose.yml stop
+  Open:      http://localhost   (admin@ibgroup.co.in / IBDocs@2026)
+  NEVER:     docker compose down -v
+================================================================

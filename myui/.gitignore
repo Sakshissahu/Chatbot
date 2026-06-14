@@ -17,3 +17,5 @@ dist-ssr
 *.local
 .DS_Store
 __pycache__
+
+.vercel

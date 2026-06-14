@@ -80,41 +80,95 @@ Write-Ok "health: $health"
 Write-Step 2 'Opening a Cloudflare quick-tunnel to :8088...'
 $cf = Get-Cloudflared
 Write-Ok "cloudflared: $cf"
-if (Test-Path $tunnelLog) { Remove-Item $tunnelLog -Force }
 
-$proc = Start-Process -FilePath $cf `
-  -ArgumentList @('tunnel','--no-autoupdate','--url','http://localhost:8088') `
-  -RedirectStandardError $tunnelLog -RedirectStandardOutput "$tunnelLog.out" `
-  -WindowStyle Hidden -PassThru
+# A previous run leaves a cloudflared process that keeps the log file open. Every
+# run rotates to a brand-new tunnel anyway, so stop the previously-tracked tunnel
+# first - this releases the log handle (otherwise the Remove-Item below throws
+# "file is being used by another process" and aborts the whole run).
+if (Test-Path $stateFile) {
+  try {
+    $prev = Get-Content $stateFile -Raw | ConvertFrom-Json
+    if ($prev.cloudflaredPid) {
+      $old = Get-Process -Id $prev.cloudflaredPid -ErrorAction SilentlyContinue
+      if ($old -and $old.ProcessName -eq 'cloudflared') {
+        Write-Note "stopping previous tunnel (PID $($prev.cloudflaredPid))..."
+        Stop-Process -Id $prev.cloudflaredPid -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 600
+      }
+    }
+  } catch { }
+}
+# Remove the old log; if a handle still lingers, fall back to a unique log name
+# so a stale lock can never block the run.
+if (Test-Path $tunnelLog) {
+  try { Remove-Item $tunnelLog -Force -ErrorAction Stop }
+  catch { $tunnelLog = Join-Path $env:TEMP ("ibchat-cloudflared-{0}.log" -f (Get-Date -Format 'yyyyMMddHHmmss')) }
+}
 
-$tunnelUrl = $null
-for ($i = 0; $i -lt 40; $i++) {
-  Start-Sleep -Milliseconds 700
-  if (Test-Path $tunnelLog) {
-    $m = Select-String -Path $tunnelLog -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($m) { $tunnelUrl = $m.Matches[0].Value; break }
+# Quick-tunnel registration can transiently fail ("failed to request quick
+# Tunnel: ... context deadline exceeded"), so retry the whole launch a few times.
+# The URL pattern requires a hyphenated multi-word host, so we never mis-capture
+# the API endpoint (api.trycloudflare.com) that shows up in cloudflared's
+# diagnostic/error lines.
+$urlPattern = 'https://[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com'
+$tunnelUrl  = $null
+$proc       = $null
+for ($attempt = 1; $attempt -le 3 -and -not $tunnelUrl; $attempt++) {
+  if ($attempt -gt 1) {
+    Write-Note "tunnel registration failed - retrying (attempt $attempt/3)..."
+    $tunnelLog = Join-Path $env:TEMP ("ibchat-cloudflared-{0}-{1}.log" -f (Get-Date -Format 'yyyyMMddHHmmss'), $attempt)
+  }
+  $proc = Start-Process -FilePath $cf `
+    -ArgumentList @('tunnel','--no-autoupdate','--url','http://localhost:8088') `
+    -RedirectStandardError $tunnelLog -RedirectStandardOutput "$tunnelLog.out" `
+    -WindowStyle Hidden -PassThru
+
+  for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 1000
+    if (Test-Path $tunnelLog) {
+      $m = Select-String -Path $tunnelLog -Pattern $urlPattern -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($m) { $tunnelUrl = $m.Matches[0].Value; break }
+      if (Select-String -Path $tunnelLog -Pattern 'failed to request quick Tunnel' -ErrorAction SilentlyContinue) { break }
+    }
+  }
+  if (-not $tunnelUrl) {
+    try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+    Start-Sleep -Milliseconds 800
   }
 }
 if (-not $tunnelUrl) {
-  try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
-  throw "Could not capture the tunnel URL. See $tunnelLog"
+  throw "Could not establish a Cloudflare quick-tunnel after 3 attempts. See $tunnelLog"
 }
 Write-Ok "tunnel: $tunnelUrl  (cloudflared PID $($proc.Id))"
 
-# Smoke-test the tunnel before wiring Vercel to it.
+# Smoke-test the tunnel before wiring Vercel to it. Brand-new *.trycloudflare.com
+# names take a few seconds for DNS to propagate locally, so POLL for up to ~45s
+# rather than failing on the first (too-early) attempt.
 $tunHost = ([Uri]$tunnelUrl).Host
-try {
-  $t = Invoke-WebRequest -UseBasicParsing -Uri "$tunnelUrl/bff/health" -TimeoutSec 10
-  Write-Ok "tunnel health: $($t.Content)"
-} catch {
-  # Local DNS sometimes lags on brand-new *.trycloudflare.com names. Confirm the
-  # name resolves on a public resolver - if so, the tunnel is live for everyone.
+$tunnelReady = $false
+Write-Host '    waiting for the tunnel to become reachable (up to ~45s)...'
+for ($i = 0; $i -lt 30; $i++) {
+  try {
+    $t = Invoke-WebRequest -UseBasicParsing -Uri "$tunnelUrl/bff/health" -TimeoutSec 5
+    if ($t.StatusCode -eq 200) {
+      Write-Ok "tunnel health (ready after ~$([int]($i*1.5))s): $($t.Content)"
+      $tunnelReady = $true
+      break
+    }
+  } catch { }
+  Start-Sleep -Milliseconds 1500
+}
+if (-not $tunnelReady) {
+  # Local DNS sometimes lags on brand-new names. Confirm the name resolves on a
+  # public resolver - if so, the tunnel is live for everyone (incl. Vercel) and we
+  # must NOT abort the deploy just because THIS PC's resolver hasn't caught up.
   try {
     $gl = Resolve-DnsName -Name $tunHost -Server 1.1.1.1 -Type A -ErrorAction Stop
-    Write-Note "tunnel is LIVE globally ($($gl[0].IPAddress)) but THIS PC's DNS hasn't caught up."
+    Write-Note "tunnel is LIVE globally ($($gl[0].IPAddress)) but THIS PC's DNS hasn't caught up - continuing."
     Write-Note "Teammates and Vercel are unaffected. To test from this PC: wait ~1 min or set DNS to 1.1.1.1."
   } catch {
-    Write-Note "tunnel not reachable yet: $($_.Exception.Message)"
+    Write-Note "tunnel not reachable from THIS PC yet (DNS still propagating): $($_.Exception.Message)"
+    Write-Note "Continuing anyway - quick-tunnels are typically live globally within a minute."
   }
 }
 
@@ -130,9 +184,24 @@ if ($TunnelOnly) {
 }
 
 # === 3. point Vercel at the tunnel + redeploy ================================
+# Every `vercel` call below MUST run with .\myui as the working directory, because
+# that is where .vercel\project.json (the project link) lives. Push-Location moves
+# the PowerShell location; we ALSO sync [Environment]::CurrentDirectory so the native
+# `vercel` child process inherits .\myui as its CWD on every host. Without this sync,
+# the CLI can resolve against the ragflow root instead and fail at the Vercel step
+# ("project not linked" / wrong scope), which is exactly what used to break here.
 Write-Step 3 'Pointing the Vercel frontend at the tunnel (VITE_BACKEND_URL)...'
+$prevEnvCwd = [Environment]::CurrentDirectory
+$prevEAP    = $ErrorActionPreference
 Push-Location $frontend
+[Environment]::CurrentDirectory = (Get-Location).ProviderPath
 try {
+  # `vercel` resolves to a node-backed .ps1 shim that writes progress/hints to
+  # stderr; under ErrorActionPreference='Stop' any such stderr write raises a
+  # terminating NativeCommandError and aborts the whole script. Relax to
+  # 'Continue' for the Vercel calls and gate success on $LASTEXITCODE instead.
+  $ErrorActionPreference = 'Continue'
+
   if (-not (Test-Path (Join-Path $frontend '.vercel\project.json'))) {
     Write-Note 'This project is not linked to Vercel yet.'
     Write-Note 'Run once:   cd myui ;  vercel login ;  vercel link'
@@ -140,10 +209,16 @@ try {
     return
   }
 
-  # Replace the production VITE_BACKEND_URL with the new tunnel URL.
-  Write-Host '    updating production env var...'
+  # Idempotently SET the production VITE_BACKEND_URL to the new tunnel URL.
+  # `env rm` first clears any existing value (a harmless no-op the first time -
+  # its "not found" output is discarded) so the following `env add` never errors
+  # with "already exists". The value is piped to `env add` via stdin (non-interactive).
+  Write-Host '    updating production env var (VITE_BACKEND_URL)...'
   & vercel env rm VITE_BACKEND_URL production --yes 2>$null | Out-Null
-  $tunnelUrl | & vercel env add VITE_BACKEND_URL production | Out-Null
+  $tunnelUrl | & vercel env add VITE_BACKEND_URL production 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to set VITE_BACKEND_URL on Vercel (env add exit $LASTEXITCODE)."
+  }
   Write-Ok "VITE_BACKEND_URL (production) = $tunnelUrl"
 
   if ($NoRedeploy) {
@@ -152,10 +227,13 @@ try {
   }
 
   Write-Step 4 'Building + deploying to Vercel production...'
-  $deployOut = & vercel deploy --prod --yes 2>&1
+  $deployOut = (& vercel deploy --prod --yes 2>&1 | ForEach-Object { "$_" })
+  $deployExit = $LASTEXITCODE
   $deployOut | ForEach-Object { Write-Host "    $_" }
-  $liveUrl = ($deployOut | Select-String -Pattern 'https://[a-z0-9.-]+\.vercel\.app' -AllMatches |
-              ForEach-Object { $_.Matches.Value } | Select-Object -Last 1)
+  if ($deployExit -ne 0) {
+    throw "vercel deploy failed (exit $deployExit). See the output above."
+  }
+  $liveUrl = "https://ib-chatbot-six.vercel.app"
 
   Write-Host "`n=========================================================" -ForegroundColor Magenta
   Write-Host "  DEMO IS LIVE - share this link:" -ForegroundColor Magenta
@@ -166,5 +244,7 @@ try {
   Write-Host "=========================================================`n" -ForegroundColor Magenta
 }
 finally {
+  $ErrorActionPreference = $prevEAP
+  [Environment]::CurrentDirectory = $prevEnvCwd
   Pop-Location
 }

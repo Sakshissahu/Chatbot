@@ -22,6 +22,8 @@ export default {
         accent: hsl('--accent'),
         'accent-soft': hsl('--accent-soft'),
         'accent-ink': hsl('--accent-ink'),
+        primary: hsl('--primary'),
+        'primary-ink': hsl('--primary-ink'),
         danger: hsl('--danger'),
       },
       fontFamily: {

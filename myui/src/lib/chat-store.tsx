@@ -122,8 +122,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       .listConversations()
       .then((list) => {
         if (!alive) return;
-        setChats(
-          list.map((c) => ({
+        setChats((prev) => {
+          // Preserve any in-memory unsent drafts — notably the fresh chat that
+          // login opens before history finishes loading — so the active draft
+          // isn't wiped (which would leave `activeChatId` dangling and block
+          // the first send).
+          const drafts = prev.filter((c) => !c.persisted);
+          const loaded = list.map((c) => ({
             id: c.id,
             roleId: c.role,
             title: c.title,
@@ -131,8 +136,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             createdAt: Date.parse(c.created_at) || Date.now(),
             persisted: true,
             loaded: false,
-          })),
-        );
+          }));
+          return [...drafts, ...loaded];
+        });
       })
       .catch((e) => alive && setConnectionError(errMsg(e)));
 

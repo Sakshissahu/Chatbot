@@ -7,31 +7,34 @@
 
 /*
   Design system: "Cultivated Intelligence"
-  - Constant IB forest-green brand identity.
-  - Role-coded accent (--accent) recolors the whole UI:
-      [data-role="farmer"]   -> warm harvest gold
-      [data-role="employee"] -> cool teal
-  - Light = warm bone paper; Dark = deep loam (never pure black).
+  - Constant IB forest-green brand identity; deep green (--primary) drives
+    primary actions, warm gold (--accent) is the secondary accent / glow.
+  - Light = warm paper with navy ink; Dark = Gemini-style neutral near-black.
   All colors are HSL channels so Tailwind can apply alpha.
 */
 @layer base {
   :root {
-    --bg: 42 36% 95%;
-    --bg-2: 40 40% 97%;
+    --bg: 42 33% 96%;
+    --bg-2: 40 26% 93%;
     --surface: 40 50% 99%;
-    --surface-2: 42 30% 94%;
+    --surface-2: 40 24% 93%;
 
-    --ink: 158 24% 11%;
-    --ink-soft: 158 9% 34%;
-    --ink-faint: 155 8% 52%;
+    /* navy ink on warm paper */
+    --ink: 220 52% 16%;
+    --ink-soft: 220 16% 38%;
+    --ink-faint: 220 11% 55%;
 
-    --border: 150 16% 85%;
-    --shadow: 158 30% 18%;
+    --border: 40 17% 85%;
+    --shadow: 220 38% 18%;
 
-    --brand: 158 44% 26%;
-    --brand-soft: 152 40% 90%;
+    --brand: 150 58% 24%;
+    --brand-soft: 150 38% 90%;
 
-    /* default accent (overridden per role) — warm harvest gold */
+    /* primary action — deep IB forest green (~#15703C), same in both themes */
+    --primary: 150 66% 26%;
+    --primary-ink: 40 40% 98%;
+
+    /* secondary accent / glow — warm harvest gold (overridden per role) */
     --accent: 36 74% 46%;
     --accent-soft: 40 80% 90%;
     --accent-ink: 40 60% 99%;
@@ -40,29 +43,33 @@
   }
 
   /*
-    Dark = elevated loam greys (à la Gemini / Claude), never pure black.
-    Layered lightness so surfaces read as raised, with borders visible enough
-    to give depth. IB green stays the brand; role accents stay vivid.
+    Dark = Gemini-style neutral near-black (main #0D0D0F, sidebar #0A0A0B),
+    not the old green loam. Only a faint cool tint remains; surfaces layer up
+    by lightness for depth. IB green (brand/primary) and gold (accent/glow)
+    stay vivid so they pop against the near-black.
   */
   .dark {
-    --bg: 156 9% 12%;
-    --bg-2: 156 9% 15%;
-    --surface: 155 9% 17%;
-    --surface-2: 153 8% 22%;
+    --bg: 240 7% 5%; /* #0D0D0F — main chat */
+    --bg-2: 240 6% 4%; /* #0A0A0B — sidebar */
+    --surface: 240 5% 9%;
+    --surface-2: 240 5% 14%;
 
-    --ink: 150 14% 94%;
-    --ink-soft: 150 9% 75%;
-    --ink-faint: 150 7% 57%;
+    --ink: 240 8% 96%;
+    --ink-soft: 240 6% 72%;
+    --ink-faint: 240 5% 50%;
 
-    --border: 152 8% 28%;
-    --shadow: 158 45% 2%;
+    --border: 240 6% 16%;
+    --shadow: 240 50% 1%;
 
-    --brand: 152 52% 62%;
-    --brand-soft: 156 22% 24%;
+    --brand: 150 48% 54%;
+    --brand-soft: 150 30% 20%;
 
-    --accent: 38 88% 62%;
-    --accent-soft: 36 35% 24%;
-    --accent-ink: 36 55% 9%;
+    --primary: 150 66% 26%;
+    --primary-ink: 40 40% 98%;
+
+    --accent: 44 92% 62%;
+    --accent-soft: 40 35% 20%;
+    --accent-ink: 40 55% 9%;
 
     --danger: 6 74% 67%;
   }

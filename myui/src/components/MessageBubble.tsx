@@ -24,7 +24,7 @@ export function MessageBubble({
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         className="flex justify-end"
       >
-        <div className="max-w-[85%] rounded-3xl rounded-br-lg bg-accent px-4 py-2.5 text-[0.95rem] leading-relaxed text-[hsl(var(--accent-ink))] shadow-soft">
+        <div className="max-w-[85%] rounded-3xl rounded-br-lg border border-border bg-surface-2 px-4 py-2.5 text-[0.95rem] leading-relaxed text-ink shadow-soft">
           {message.content}
         </div>
       </motion.div>

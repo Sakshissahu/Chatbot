@@ -246,3 +246,5 @@ START_HERE.txt
 
 # Per-demo runtime state (tunnel url/pid) — written to TEMP, never the repo
 .demo-state.json
+
+_ref

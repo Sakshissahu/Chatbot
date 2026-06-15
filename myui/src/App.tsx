@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LoginScreen } from '@/screens/LoginScreen';
-import { RoleSelectScreen } from '@/screens/RoleSelectScreen';
 import { ChatScreen } from '@/screens/ChatScreen';
 import { useAuth } from '@/lib/auth';
 import { useChats } from '@/lib/chat-store';
 import { NavProvider, type NavCtx, type Screen } from '@/lib/nav';
-import type { RoleId } from '@/lib/roles';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -17,18 +15,18 @@ const fade = {
   transition: { duration: 0.32, ease },
 };
 
+// Single assistant: every user talks to the farmer knowledge base. The backend
+// still routes by this role id, so it stays 'farmer' end-to-end.
+const ROLE = 'farmer' as const;
+
 export default function App() {
   const { user, login, logout } = useAuth();
   const { enterRole } = useChats();
   const [screen, setScreen] = useState<Screen>('login');
-  const [activeRole, setActiveRole] = useState<RoleId | null>(null);
 
   // Auth gate: losing the user always returns to login.
   useEffect(() => {
-    if (!user) {
-      setScreen('login');
-      setActiveRole(null);
-    }
+    if (!user) setScreen('login');
   }, [user]);
 
   const authenticate = useCallback(
@@ -37,34 +35,20 @@ export default function App() {
       // Await the backend login so `user` is set before we leave the login
       // screen — otherwise the auth gate would bounce us straight back.
       await login(name, password);
-      setScreen('role');
-    },
-    [login],
-  );
-
-  const selectRole = useCallback(
-    (role: RoleId) => {
-      setActiveRole(role);
-      enterRole(role);
+      // No role-select step: open the farmer workspace straight away.
+      enterRole(ROLE);
       setScreen('chat');
     },
-    [enterRole],
+    [login, enterRole],
   );
 
   const nav = useMemo<NavCtx>(
     () => ({
       screen,
-      activeRole,
       authenticate,
-      goHome: () => setScreen('role'),
-      back: () => {
-        if (screen === 'chat') setScreen('role');
-        else if (screen === 'role') logout(); // gate effect returns to login
-      },
-      selectRole,
       signOut: () => logout(),
     }),
-    [screen, activeRole, authenticate, selectRole, logout],
+    [screen, authenticate, logout],
   );
 
   return (
@@ -75,14 +59,9 @@ export default function App() {
             <LoginScreen />
           </motion.div>
         )}
-        {screen === 'role' && (
-          <motion.div key="role" {...fade}>
-            <RoleSelectScreen />
-          </motion.div>
-        )}
-        {screen === 'chat' && activeRole && (
+        {screen === 'chat' && (
           <motion.div key="chat" {...fade}>
-            <ChatScreen roleId={activeRole} />
+            <ChatScreen roleId={ROLE} />
           </motion.div>
         )}
       </AnimatePresence>

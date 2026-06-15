@@ -19,3 +19,4 @@ dist-ssr
 __pycache__
 
 .vercel
+_ref

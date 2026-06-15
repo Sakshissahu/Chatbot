@@ -1,26 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Menu, Sparkles } from 'lucide-react';
+import { AlertTriangle, Menu } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { TopBar, BackButton } from '@/components/TopBar';
+import { TopBar } from '@/components/TopBar';
 import { Sidebar } from '@/components/Sidebar';
 import { MessageBubble } from '@/components/MessageBubble';
 import { Composer } from '@/components/Composer';
 import { useChats } from '@/lib/chat-store';
 import { useNav } from '@/lib/nav';
 import { useAuth } from '@/lib/auth';
-import { ROLES, type RoleConfig, type RoleId } from '@/lib/roles';
-import { cn } from '@/lib/cn';
+import { ROLES, type RoleId } from '@/lib/roles';
 
 const ease = [0.22, 1, 0.36, 1] as const;
-const isMobile = () =>
-  typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
 
 export function ChatScreen({ roleId }: { roleId: RoleId }) {
   const role = ROLES[roleId];
   const { user } = useAuth();
-  const { goHome, back } = useNav();
+  const { signOut } = useNav();
   const {
     activeChat,
     chatsForRole,
@@ -33,7 +30,8 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
     stop,
   } = useChats();
 
-  const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile());
+  const [collapsed, setCollapsed] = useState(false); // desktop: full ↔ icon rail
+  const [mobileOpen, setMobileOpen] = useState(false); // mobile overlay
   const endRef = useRef<HTMLDivElement>(null);
 
   const messages = activeChat?.messages ?? [];
@@ -41,13 +39,18 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
   const chats = chatsForRole(roleId);
   const Icon = role.icon;
 
+  // A fresh, time-aware greeting on every mount (refresh) and every new chat.
+  const greeting = useMemo(() => {
+    const first = (user?.name ?? '').trim().split(/\s+/)[0] ?? '';
+    const pool = buildGreetings(first, new Date().getHours());
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, [activeChat?.id, user?.name]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
 
-  const closeOnMobile = () => {
-    if (isMobile()) setSidebarOpen(false);
-  };
+  const closeOnMobile = () => setMobileOpen(false);
 
   const handleNewChat = useCallback(() => {
     newChat(roleId);
@@ -69,13 +72,13 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
           <>
             <button
               type="button"
-              onClick={() => setSidebarOpen((o) => !o)}
-              aria-label="Toggle sidebar"
-              className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface/70 text-ink-soft transition-colors hover:text-ink"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+              className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface/70 text-ink-soft transition-colors hover:text-ink lg:hidden"
             >
               <Menu className="h-4 w-4" />
             </button>
-            <Logo onClick={goHome} />
+            <Logo />
           </>
         }
         right={
@@ -85,129 +88,182 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
               <span className="hidden sm:inline">{role.label}</span>
             </span>
             <ThemeToggle />
-            <BackButton label="Assistants" onClick={back} />
           </>
         }
       />
 
       <div className="flex min-h-0 flex-1">
         <Sidebar
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+          collapsed={collapsed}
+          mobileOpen={mobileOpen}
           roleId={roleId}
           chats={chats}
           activeChatId={activeChat?.id ?? null}
           userName={user?.name ?? ''}
+          onToggleCollapse={() => setCollapsed((c) => !c)}
+          onCloseMobile={() => setMobileOpen(false)}
           onNewChat={handleNewChat}
           onSelect={handleSelect}
           onDelete={deleteChat}
+          onSignOut={signOut}
         />
 
         <main className="relative flex min-w-0 flex-1 flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto">
-            <div
-              className={cn(
-                'mx-auto w-full max-w-3xl px-4 py-6 sm:px-6',
-                empty && 'flex min-h-full flex-col justify-center',
-              )}
-            >
-              {connectionError && (
-                <div className="mb-5 flex items-start gap-2 rounded-2xl border border-danger/30 bg-danger/10 px-3.5 py-3 text-sm text-ink">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-                  <span>
-                    Couldn’t reach the assistant: {connectionError}. Check that RAGFlow is running,
-                    then send your message again.
-                  </span>
+          {empty ? (
+            <HomeView
+              greeting={greeting}
+              corpus={role.corpus}
+              placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
+              busy={busy}
+              connectionError={connectionError}
+              onSend={send}
+              onStop={stop}
+            />
+          ) : (
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+                  {connectionError && <ErrorBanner message={connectionError} />}
+                  <div className="space-y-6">
+                    <AnimatePresence initial={false}>
+                      {messages.map((m) => (
+                        <MessageBubble key={m.id} message={m} icon={Icon} />
+                      ))}
+                    </AnimatePresence>
+                    <div ref={endRef} />
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {empty ? (
-                <EmptyState
-                  role={role}
-                  name={user?.name ?? ''}
-                  onPick={send}
-                  disabled={busy || !!connectionError}
-                />
-              ) : (
-                <div className="space-y-6">
-                  <AnimatePresence initial={false}>
-                    {messages.map((m) => (
-                      <MessageBubble key={m.id} message={m} icon={Icon} />
-                    ))}
-                  </AnimatePresence>
-                  <div ref={endRef} />
+              {/* Composer pinned to the bottom of the message column */}
+              <div className="border-t border-border bg-bg/80 backdrop-blur-xl">
+                <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-3 sm:px-6">
+                  <Composer
+                    busy={busy}
+                    onSend={send}
+                    onStop={stop}
+                    placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
+                  />
+                  <p className="mt-2 text-center text-[0.7rem] text-ink-faint">
+                    Answers come only from the {role.corpus.toLowerCase()} — if it’s not in there,
+                    the assistant will say so.
+                  </p>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Composer pinned to the message column */}
-          <div className="border-t border-border bg-bg/80 backdrop-blur-xl">
-            <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-3 sm:px-6">
-              <Composer
-                busy={busy}
-                onSend={send}
-                onStop={stop}
-                placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
-              />
-              <p className="mt-2 text-center text-[0.7rem] text-ink-faint">
-                Answers come only from the {role.corpus.toLowerCase()} — if it’s not in there, the
-                assistant will say so.
-              </p>
-            </div>
-          </div>
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>
   );
 }
 
-function EmptyState({
-  role,
-  name,
-  onPick,
-  disabled,
-}: {
-  role: RoleConfig;
-  name: string;
-  onPick: (q: string) => void;
-  disabled: boolean;
-}) {
-  const Icon = role.icon;
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease }}
-      className="flex flex-col items-center text-center"
-    >
-      <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-accent/14 text-accent ring-1 ring-accent/25">
-        <Icon className="h-8 w-8" strokeWidth={1.7} />
-      </span>
-      <h2 className="display mt-5 text-3xl font-semibold tracking-tight text-ink">
-        {name ? `Hello, ${name}.` : 'Hello.'}
-      </h2>
-      <p className="mt-2 max-w-md text-[0.98rem] leading-relaxed text-ink-soft">
-        {role.blurb} Ask anything below, or start with one of these.
-      </p>
+/** ~8 short, understated greetings — a static set plus a time-of-day one. */
+function buildGreetings(firstName: string, hour: number): string[] {
+  const fn = firstName || 'there';
+  const tod = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  return [
+    `Welcome back, ${fn}`,
+    `Good to see you, ${fn}`,
+    `Where shall we start, ${fn}?`,
+    `Ready when you are, ${fn}`,
+    `What can I help with, ${fn}?`,
+    `How can I help today, ${fn}?`,
+    `Let’s get started, ${fn}`,
+    `Good ${tod}, ${fn}`,
+  ];
+}
 
-      <div className="mt-7 grid w-full max-w-xl gap-2.5 text-left">
-        {role.suggestions.map((s, i) => (
-          <motion.button
-            key={s}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: 0.15 + i * 0.08, ease }}
-            disabled={disabled}
-            onClick={() => onPick(s)}
-            className="group flex items-center gap-3 rounded-2xl border border-border bg-surface/70 px-4 py-3 text-[0.92rem] text-ink-soft shadow-soft backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:text-ink hover:shadow-lift disabled:opacity-50 disabled:hover:translate-y-0"
-          >
-            <Sparkles className="h-4 w-4 shrink-0 text-accent" />
-            <span className="flex-1">{s}</span>
-          </motion.button>
-        ))}
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="mb-5 flex items-start gap-2 rounded-2xl border border-danger/30 bg-danger/10 px-3.5 py-3 text-sm text-ink">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+      <span>
+        Couldn’t reach the assistant: {message}. Check that RAGFlow is running, then send your
+        message again.
+      </span>
+    </div>
+  );
+}
+
+/** Home / empty state — centered greeting + composer over a soft IB-brand glow. */
+function HomeView({
+  greeting,
+  corpus,
+  placeholder,
+  busy,
+  connectionError,
+  onSend,
+  onStop,
+}: {
+  greeting: string;
+  corpus: string;
+  placeholder: string;
+  busy: boolean;
+  connectionError: string | null;
+  onSend: (text: string) => void;
+  onStop: () => void;
+}) {
+  return (
+    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-10">
+      <HomeGlow />
+      <div className="relative z-10 flex w-full max-w-2xl flex-col items-center">
+        <motion.h1
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease }}
+          className="display text-balance text-center text-3xl font-semibold tracking-tight text-ink sm:text-[2.6rem] sm:leading-[1.1]"
+        >
+          {greeting}
+        </motion.h1>
+
+        {connectionError && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 w-full">
+            <ErrorBanner message={connectionError} />
+          </motion.div>
+        )}
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.12, ease }}
+          className="mt-8 w-full"
+        >
+          <Composer busy={busy} onSend={onSend} onStop={onStop} placeholder={placeholder} />
+          <p className="mt-3 text-center text-[0.72rem] text-ink-faint">
+            Answers come only from the {corpus.toLowerCase()} — if it’s not in there, the assistant
+            will say so.
+          </p>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
+  );
+}
+
+/**
+ * Soft radial glow behind the home composer — IB forest-green + warm gold
+ * bleeding into the page. CSS-only (reliable on low-end devices); rendered only
+ * in the home state, so it disappears the moment a conversation starts.
+ */
+function HomeGlow() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* green core, centered behind the composer */}
+      <div
+        className="absolute left-1/2 top-[56%] h-[620px] w-[620px] max-w-[150vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-70 blur-[90px]"
+        style={{
+          background:
+            'radial-gradient(circle, hsl(var(--brand) / 0.45) 0%, hsl(var(--brand) / 0.16) 40%, transparent 70%)',
+        }}
+      />
+      {/* warm gold bloom, offset above */}
+      <div
+        className="absolute left-1/2 top-[38%] h-[460px] w-[560px] max-w-[140vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-60 blur-[80px]"
+        style={{
+          background: 'radial-gradient(circle, hsl(var(--accent) / 0.30) 0%, transparent 65%)',
+        }}
+      />
+    </div>
   );
 }

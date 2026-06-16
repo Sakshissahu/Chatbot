@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   MoreHorizontal,
   PanelLeft,
+  Pencil,
   Search,
   Settings,
   SquarePen,
@@ -44,6 +45,8 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Rename a chat (persists via the chat store). */
+  onRename: (id: string, title: string) => void;
   /** Open the centered Settings modal (theme + sign out live there now). */
   onOpenSettings: () => void;
 }
@@ -129,6 +132,7 @@ function SidebarFull({
   onNewChat,
   onSelect,
   onDelete,
+  onRename,
   onOpenSettings,
 }: SidebarProps & { variant: 'desktop' | 'mobile' }) {
   const role = ROLES[roleId];
@@ -165,9 +169,9 @@ function SidebarFull({
         <button
           type="button"
           onClick={onNewChat}
-          className="focus-ring flex w-full items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/12 px-3.5 py-2.5 font-display text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+          className="focus-ring flex w-full items-center gap-2.5 rounded-2xl border border-border bg-surface-2/60 px-3.5 py-2.5 font-display text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
         >
-          <SquarePen className="h-[18px] w-[18px]" strokeWidth={2} />
+          <SquarePen className="h-[18px] w-[18px] text-ink-soft" strokeWidth={2} />
           New chat
         </button>
         {/* Styled placeholder — chat search is not wired to the backend yet.
@@ -201,14 +205,17 @@ function SidebarFull({
                 variant={variant}
                 onSelect={onSelect}
                 onDelete={onDelete}
+                onRename={onRename}
               />
             ))}
           </ul>
         )}
       </div>
 
-      {/* User footer — settings + sign out pinned at the bottom. */}
-      <div className="border-t border-border p-3">
+      {/* User footer — flush with the sidebar (no divider), pinned to the
+          bottom. Extra bottom padding via the safe-area inset lifts it clear of
+          the device system navigation bar on phones. */}
+      <div className="px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand ring-1 ring-brand/25">
             {initial}
@@ -237,12 +244,14 @@ const LONG_PRESS_MS = 500; // intentional hold before the mobile delete appears
 const MOVE_TOLERANCE = 10; // px of finger travel that reclassifies a press as a scroll
 
 /**
- * A single chat-history row. Selection logic is unchanged (`onSelect`); the
- * delete trigger differs by surface but always calls the same `onDelete`:
- *   • mobile (overlay): long-press (~500ms) reveals a red delete button on the
- *     row; tapping it deletes immediately. A tap dismisses it; scrolling cancels.
- *   • desktop: a ⋯ button appears on hover/focus and opens a small menu with a
- *     red Delete. Rendered in a portal so the sidebar's overflow never clips it.
+ * A single chat-history row. Selection (`onSelect`) is unchanged. The per-chat
+ * context menu — Rename + Delete — is the SAME on both surfaces, only its
+ * trigger differs:
+ *   • mobile (overlay): long-press (~500ms) opens the menu anchored to the row.
+ *   • desktop: a ⋯ button on hover/focus opens the menu below the button.
+ * The menu is rendered in a portal so the sidebar's overflow never clips it.
+ * Rename swaps the row for an inline input (Enter/blur commits, Esc cancels);
+ * Delete and Rename both call the existing store actions.
  */
 function ChatRow({
   chat,
@@ -250,21 +259,26 @@ function ChatRow({
   variant,
   onSelect,
   onDelete,
+  onRename,
 }: {
   chat: Chat;
   active: boolean;
   variant: 'desktop' | 'mobile';
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => void;
 }) {
   const isMobile = variant === 'mobile';
-  const [open, setOpen] = useState(false); // mobile: delete revealed · desktop: menu open
+  const [open, setOpen] = useState(false); // per-chat menu open
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [editing, setEditing] = useState(false); // inline rename
+  const [value, setValue] = useState(chat.title);
 
   const liRef = useRef<HTMLLIElement>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const deleteRef = useRef<HTMLButtonElement>(null);
+  const firstItemRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Long-press bookkeeping (mobile only).
   const timer = useRef<number | null>(null);
@@ -277,8 +291,13 @@ function ChatRow({
     }
   }, []);
 
-  // Dismiss on outside interaction, Escape, or (desktop) scroll/resize since the
-  // menu is portal-positioned and would otherwise float free of its anchor.
+  // Keep the rename field in sync when the title changes while not editing.
+  useEffect(() => {
+    if (!editing) setValue(chat.title);
+  }, [chat.title, editing]);
+
+  // Dismiss the menu on outside interaction, Escape, or scroll/resize (it is
+  // portal-positioned and would otherwise float free of its anchor).
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: Event) => {
@@ -295,32 +314,58 @@ function ChatRow({
     const reposition = () => setOpen(false);
     document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keydown', onKey);
-    if (!isMobile) {
-      window.addEventListener('scroll', reposition, true);
-      window.addEventListener('resize', reposition);
-    }
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', reposition, true);
       window.removeEventListener('resize', reposition);
     };
-  }, [open, isMobile]);
+  }, [open]);
 
-  // Move focus onto Delete when the desktop menu opens (keyboard support).
+  // Move focus onto the first item (Rename) when the menu opens (keyboard).
   useEffect(() => {
-    if (open && !isMobile) deleteRef.current?.focus();
-  }, [open, isMobile]);
+    if (open) firstItemRef.current?.focus();
+  }, [open]);
+
+  // Select the text when the inline rename input mounts.
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  // Open the menu anchored to a rect (the ⋯ button on desktop, the row on
+  // mobile long-press), flipping above when there isn't room below.
+  const openMenuAt = (r: DOMRect) => {
+    const W = 160;
+    const H = 92; // ~two items
+    const top = r.bottom + 6 + H > window.innerHeight ? r.top - H - 6 : r.bottom + 6;
+    setMenuPos({ top: Math.max(8, top), left: Math.max(8, r.right - W) });
+    setOpen(true);
+  };
 
   const toggleMenu = () => {
-    const r = dotsRef.current?.getBoundingClientRect();
-    if (r) {
-      const W = 156;
-      const H = 48;
-      const top = r.bottom + 6 + H > window.innerHeight ? r.top - H - 6 : r.bottom + 6;
-      setMenuPos({ top, left: Math.max(8, r.right - W) });
+    if (open) {
+      setOpen(false);
+      return;
     }
-    setOpen((o) => !o);
+    const r = dotsRef.current?.getBoundingClientRect();
+    if (r) openMenuAt(r);
+  };
+
+  const startRename = () => {
+    setOpen(false);
+    setValue(chat.title);
+    setEditing(true);
+  };
+  const commitRename = () => {
+    const next = value.trim();
+    if (next && next !== chat.title) onRename(chat.id, next);
+    setEditing(false);
+  };
+  const cancelRename = () => {
+    setValue(chat.title);
+    setEditing(false);
   };
 
   const beginPress = (x: number, y: number) => {
@@ -330,7 +375,8 @@ function ChatRow({
     clearTimer();
     timer.current = window.setTimeout(() => {
       pressFired.current = true;
-      setOpen(true);
+      const r = liRef.current?.getBoundingClientRect();
+      if (r) openMenuAt(r);
       navigator.vibrate?.(12);
     }, LONG_PRESS_MS);
   };
@@ -345,12 +391,38 @@ function ChatRow({
       pressFired.current = false;
       return;
     }
-    if (isMobile && open) {
-      setOpen(false); // a plain tap dismisses the revealed delete
+    if (open) {
+      setOpen(false); // a plain tap dismisses an open menu
       return;
     }
     onSelect(chat.id);
   };
+
+  // Inline rename — replaces the row while active.
+  if (editing) {
+    return (
+      <li ref={liRef} className="relative">
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitRename();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelRename();
+            }
+          }}
+          onBlur={commitRename}
+          aria-label="Chat name"
+          maxLength={120}
+          className="focus-ring w-full rounded-full bg-surface-2 py-2 pl-3.5 pr-3 text-sm font-medium text-ink outline-none"
+        />
+      </li>
+    );
+  }
 
   return (
     <li ref={liRef} className="group relative">
@@ -365,8 +437,8 @@ function ChatRow({
           if (isMobile) e.preventDefault();
         }}
         className={cn(
-          'focus-ring flex w-full items-center rounded-full py-2 pl-3.5 pr-9 text-left text-sm transition-colors',
-          isMobile && 'select-none [-webkit-touch-callout:none]',
+          'focus-ring flex w-full items-center rounded-full py-2 pl-3.5 text-left text-sm transition-colors',
+          isMobile ? 'pr-3.5 select-none [-webkit-touch-callout:none]' : 'pr-9',
           active
             ? 'bg-ink/[0.08] font-medium text-ink'
             : 'text-ink-soft hover:bg-ink/[0.05] hover:text-ink',
@@ -375,26 +447,8 @@ function ChatRow({
         <span className="truncate">{chat.title}</span>
       </button>
 
-      {isMobile ? (
-        // Mobile: red delete revealed by long-press; tap = immediate delete.
-        <AnimatePresence>
-          {open && (
-            <motion.button
-              type="button"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.14, ease }}
-              onClick={() => onDelete(chat.id)}
-              aria-label={`Delete chat: ${chat.title}`}
-              className="focus-ring absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-danger/15 text-danger"
-            >
-              <Trash2 className="h-4 w-4" strokeWidth={2} />
-            </motion.button>
-          )}
-        </AnimatePresence>
-      ) : (
-        // Desktop: ⋯ on hover/focus opens the menu below.
+      {/* Desktop: ⋯ on hover/focus opens the menu. Mobile uses long-press. */}
+      {!isMobile && (
         <button
           ref={dotsRef}
           type="button"
@@ -411,39 +465,47 @@ function ChatRow({
         </button>
       )}
 
-      {!isMobile &&
-        createPortal(
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                ref={menuRef}
-                role="menu"
-                aria-label={`Options for chat: ${chat.title}`}
-                initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                transition={{ duration: 0.14, ease }}
-                style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: 156 }}
-                className="z-[120] origin-top overflow-hidden rounded-xl border border-border bg-surface p-1 shadow-lift"
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              ref={menuRef}
+              role="menu"
+              aria-label={`Options for chat: ${chat.title}`}
+              initial={{ opacity: 0, scale: 0.96, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -4 }}
+              transition={{ duration: 0.14, ease }}
+              style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: 160 }}
+              className="z-[120] origin-top overflow-hidden rounded-xl border border-border bg-surface p-1 shadow-lift"
+            >
+              <button
+                ref={firstItemRef}
+                type="button"
+                role="menuitem"
+                onClick={startRename}
+                className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
               >
-                <button
-                  ref={deleteRef}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setOpen(false);
-                    onDelete(chat.id);
-                  }}
-                  className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-danger transition-colors hover:bg-danger/10"
-                >
-                  <Trash2 className="h-4 w-4" strokeWidth={2} />
-                  Delete
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>,
-          document.body,
-        )}
+                <Pencil className="h-4 w-4" strokeWidth={2} />
+                Rename
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onDelete(chat.id);
+                }}
+                className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={2} />
+                Delete
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </li>
   );
 }

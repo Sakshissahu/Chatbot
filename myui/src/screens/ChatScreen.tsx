@@ -3,19 +3,22 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Menu } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { SettingsModal } from '@/components/SettingsModal';
-import { ChatTitleBar } from '@/components/ChatTitleBar';
-import { ProgressiveBlur } from '@/components/ProgressiveBlur';
+import { AppMenu } from '@/components/AppMenu';
 import { MessageBubble } from '@/components/MessageBubble';
 import { Composer } from '@/components/Composer';
 import { useChats } from '@/lib/chat-store';
 import { useNav } from '@/lib/nav';
 import { useAuth } from '@/lib/auth';
-import { ROLES, type RoleId } from '@/lib/roles';
+import { type RoleId } from '@/lib/roles';
+import logoUrl from '@/assets/ibg-logo.png';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
+/** Product/bot name (the brand "IB Group" stays in the sidebar header). */
+const BOT_NAME = 'IB Chicken Bot';
+const COMPOSER_PLACEHOLDER = 'Ask IB chicken bot…';
+
 export function ChatScreen({ roleId }: { roleId: RoleId }) {
-  const role = ROLES[roleId];
   const { user } = useAuth();
   const { signOut } = useNav();
   const {
@@ -68,9 +71,9 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
 
   return (
     <div data-role={roleId} className="flex h-dvh flex-col overflow-hidden bg-bg">
-      {/* Phone top bar — compact & borderless: hamburger + chat name + rename
-          pencil. WEB has no top bar (the icon rail is the only chrome); the web
-          top fade is the ProgressiveBlur inside <main>. */}
+      {/* Phone top bar — compact & borderless: hamburger + the BOT name +
+          app-level ⋯ menu. Rename now lives in the per-chat menu, not here.
+          WEB has no top bar; its ⋯ floats at the top-right of the chat. */}
       <header className="relative z-30 flex h-12 shrink-0 items-center gap-1.5 bg-bg px-2 lg:hidden">
         <button
           type="button"
@@ -80,13 +83,10 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <ChatTitleBar
-          title={activeChat?.title ?? 'New chat'}
-          canRename={!!activeChat}
-          onRename={(t) => {
-            if (activeChat) renameChat(activeChat.id, t);
-          }}
-        />
+        <span className="min-w-0 flex-1 truncate pl-1 text-sm font-semibold text-ink">
+          {BOT_NAME}
+        </span>
+        <AppMenu />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -102,6 +102,7 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
           onNewChat={handleNewChat}
           onSelect={handleSelect}
           onDelete={deleteChat}
+          onRename={renameChat}
           onOpenSettings={() => {
             setMobileOpen(false);
             setSettingsOpen(true);
@@ -109,10 +110,17 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
         />
 
         <main className="relative flex min-w-0 flex-1 flex-col">
+          {/* WEB: the app-level ⋯ menu floats at the top-right of the chat area
+              (the phone shows it in the top bar instead). Present in both the
+              home and chat states; sits above the top fade. */}
+          <div className="absolute right-3 top-3 z-30 hidden lg:flex">
+            <AppMenu />
+          </div>
+
           {empty ? (
             <HomeView
               greeting={greeting}
-              placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
+              placeholder={COMPOSER_PLACEHOLDER}
               busy={busy}
               connectionError={connectionError}
               onSend={send}
@@ -120,17 +128,17 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
             />
           ) : (
             <>
-              {/* WEB ONLY: top fade so messages dissolve under a borderless,
-                  transparent top as they scroll up (the web shell has no top
-                  bar). Hidden on phone. The bottom composer fade is untouched. */}
-              <ProgressiveBlur className="z-10 hidden lg:block" />
+              {/* Top fade — mirrors the composer's bottom fade (same gradient,
+                  flipped) so messages dissolve into the page at the top too.
+                  Both platforms. */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-bg to-bg/0" />
 
               {/* Messages — fills the column. The trailing spacer (and scroll
                   target) is the height of the floating composer so the last
-                  message always scrolls clear of it. On web, extra top padding
-                  keeps resting content clear of the top fade. */}
+                  message always scrolls clear of it. Top padding keeps resting
+                  content clear of the top fade. */}
               <div className="flex-1 overflow-y-auto">
-                <div className="mx-auto w-full max-w-3xl px-4 pt-6 sm:px-6 lg:pt-24">
+                <div className="mx-auto w-full max-w-3xl px-4 pt-16 sm:px-6 lg:pt-20">
                   {connectionError && <ErrorBanner message={connectionError} />}
                   <div className="space-y-6">
                     <AnimatePresence initial={false}>
@@ -144,19 +152,18 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
               </div>
 
               {/* Floating composer — pinned to the bottom of the column while
-                  scrolling. A soft gradient fade (transparent → page bg) above
-                  it lets content dissolve into the background instead of being
-                  cut by a hard line. The pill itself floats on the page bg with
-                  side + bottom breathing room. */}
+                  scrolling. The soft gradient fade above it (transparent → page
+                  bg) is unchanged; the bottom padding now respects the device
+                  safe-area so the pill clears the system nav bar on phones. */}
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
                 <div className="h-16 bg-gradient-to-t from-bg to-bg/0" />
-                <div className="bg-bg pb-4">
+                <div className="bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
                   <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4 sm:px-6">
                     <Composer
                       busy={busy}
                       onSend={send}
                       onStop={stop}
-                      placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
+                      placeholder={COMPOSER_PLACEHOLDER}
                     />
                   </div>
                 </div>
@@ -235,13 +242,23 @@ function HomeView({
     <div className="relative flex flex-1 flex-col overflow-hidden">
       <HomeGlow />
 
-      {/* Greeting (+ the desktop composer) — vertically centered as a group. */}
+      {/* Greeting (+ the desktop composer) — vertically centered as a group,
+          with the IB Group mark sitting just above it (home/empty state only). */}
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10">
         <div className="flex w-full max-w-2xl flex-col items-center">
+          <motion.img
+            src={logoUrl}
+            alt="IB Group"
+            draggable={false}
+            initial={{ opacity: 0, y: 14, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.55, ease }}
+            className="mb-5 h-14 w-14 select-none object-contain sm:h-16 sm:w-16"
+          />
           <motion.h1
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease }}
+            transition={{ duration: 0.55, delay: 0.06, ease }}
             className="display text-balance text-center text-3xl font-semibold tracking-tight text-ink sm:text-[2.6rem] sm:leading-[1.1]"
           >
             {greeting}
@@ -265,8 +282,9 @@ function HomeView({
         </div>
       </div>
 
-      {/* Mobile: composer pinned to the bottom (same as the in-chat layout). */}
-      <div className="relative z-10 px-4 pb-4 lg:hidden">
+      {/* Mobile: composer pinned to the bottom (same as the in-chat layout).
+          Safe-area bottom padding lifts it clear of the device nav bar. */}
+      <div className="relative z-10 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden">
         <div className="mx-auto w-full max-w-2xl">{composer}</div>
       </div>
     </div>

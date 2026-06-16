@@ -14,7 +14,7 @@ import logoUrl from '@/assets/ibg-logo.png';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-/** Product/bot name (the brand "IB Group" stays in the sidebar header). */
+/** Product/bot name — shown in the phone top bar (and matches the sidebar header). */
 const BOT_NAME = 'IB Chicken Bot';
 const COMPOSER_PLACEHOLDER = 'Ask IB chicken bot…';
 

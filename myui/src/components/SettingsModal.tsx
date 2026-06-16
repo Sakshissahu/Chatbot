@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LogOut, Moon, Sun, X } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
-import { ThemeToggle } from '@/components/ThemeToggle';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -21,7 +20,7 @@ export function SettingsModal({
   onClose: () => void;
   onSignOut: () => void;
 }) {
-  const { theme } = useTheme();
+  const { theme, toggle } = useTheme();
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // Esc to close, and move focus into the dialog when it opens.
@@ -83,21 +82,41 @@ export function SettingsModal({
             </div>
 
             <div className="space-y-2.5 p-5">
-              {/* Appearance — the existing theme toggle, relocated here. */}
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-bg-2/50 px-4 py-3">
-                <div className="flex min-w-0 items-center gap-3">
+              {/* Appearance — the whole row is the toggle (mirrors the Sign out
+                  row): clicking anywhere flips light/dark. The right-side badge
+                  is a visual indicator of the current mode, not a separate
+                  control. */}
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="focus-ring flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-bg-2/50 px-4 py-3 text-left transition-colors hover:bg-surface"
+              >
+                <span className="flex min-w-0 items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-ink-soft">
                     {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                   </span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink">Appearance</div>
-                    <div className="text-xs text-ink-faint">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">Appearance</span>
+                    <span className="block text-xs text-ink-faint">
                       {theme === 'dark' ? 'Dark' : 'Light'} mode
-                    </div>
-                  </div>
-                </div>
-                <ThemeToggle />
-              </div>
+                    </span>
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface/70 text-ink-soft"
+                >
+                  <motion.span
+                    key={theme}
+                    initial={{ rotate: -40, opacity: 0, scale: 0.6 }}
+                    animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.35, ease }}
+                  >
+                    {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  </motion.span>
+                </span>
+              </button>
 
               {/* Sign out — uses the existing auth logout. */}
               <button

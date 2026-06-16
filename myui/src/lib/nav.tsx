@@ -13,8 +13,11 @@ export type Screen = 'login' | 'chat';
 
 export interface NavCtx {
   screen: Screen;
-  /** Log in (dummy auth, via the backend) and go straight to the chat. */
-  authenticate: (name: string, password: string) => Promise<void>;
+  /**
+   * Log in (dummy auth, via the backend) and go straight to the chat.
+   * `remember` keeps the session past browser close (localStorage vs session).
+   */
+  authenticate: (name: string, password: string, remember?: boolean) => Promise<void>;
   /** Clear the session and return to login. */
   signOut: () => void;
 }

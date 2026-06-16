@@ -76,11 +76,68 @@ export interface AskUpdate {
 
 export class ApiError extends Error {}
 
-// --- session token (set on login, cleared on logout) ---
+// --- session persistence (set on login, cleared on logout) ---
+//
+// A session = the opaque token + the minimal user it belongs to. "Remember me"
+// decides WHERE it lives so the token survives the right amount of time:
+//   • checked   → localStorage  (survives browser/tab close)
+//   • unchecked → sessionStorage (cleared when the tab/browser closes)
+// We always mirror-clear the other store so a session never lingers in both.
+// `sessionToken` stays the in-memory value the request headers read.
+const SESSION_KEY = 'ibg-session';
+
+interface PersistedSession {
+  token: string;
+  user: { id: string; name: string };
+}
+
 let sessionToken: string | null = null;
-export const setToken = (t: string | null) => {
-  sessionToken = t;
-};
+
+const store = (remember: boolean): Storage => (remember ? localStorage : sessionStorage);
+
+/** Persist the session and make its token the active (in-memory) one. */
+export function saveSession(session: PersistedSession, remember: boolean): void {
+  sessionToken = session.token;
+  try {
+    store(remember).setItem(SESSION_KEY, JSON.stringify(session));
+    store(!remember).removeItem(SESSION_KEY);
+  } catch {
+    /* storage blocked (private mode / quota) — fall back to in-memory only */
+  }
+}
+
+/**
+ * Restore a persisted session on startup, checking localStorage first then
+ * sessionStorage. Re-activates the in-memory token. Returns null if none/invalid.
+ */
+export function loadSession(): PersistedSession | null {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PersistedSession>;
+    if (typeof parsed.token !== 'string' || typeof parsed.user?.id !== 'string') return null;
+    sessionToken = parsed.token;
+    return { token: parsed.token, user: { id: parsed.user.id, name: parsed.user.name ?? '' } };
+  } catch {
+    return null;
+  }
+}
+
+/** Clear the session from memory and BOTH stores (sign out). */
+export function clearSession(): void {
+  sessionToken = null;
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function headers(extra: Record<string, string> = {}): HeadersInit {
   return sessionToken ? { Authorization: `Bearer ${sessionToken}`, ...extra } : extra;

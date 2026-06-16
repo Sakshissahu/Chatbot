@@ -140,13 +140,13 @@ function SidebarFull({
 
   return (
     <div className="flex h-full flex-col" style={{ width: variant === 'desktop' ? FULL_W : '100%' }}>
-      {/* Header — IB Group brand lockup; the rail shows the same mark, so the
-          logo stays put as the sidebar expands/collapses. */}
+      {/* Header — IB Chicken Bot brand lockup; the rail shows the same mark, so
+          the logo stays put as the sidebar expands/collapses. */}
       <div className="flex items-center justify-between gap-2 px-3 py-3">
         <div className="flex items-center gap-2.5 pl-1">
           <Logo showWord={false} />
           <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
-            IB Group
+            IB Chicken Bot
           </span>
         </div>
         <button
@@ -213,9 +213,10 @@ function SidebarFull({
       </div>
 
       {/* User footer — flush with the sidebar (no divider), pinned to the
-          bottom. Extra bottom padding via the safe-area inset lifts it clear of
-          the device system navigation bar on phones. */}
-      <div className="px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          bottom. A comfortable bottom gap lifts it clear of the edge on web and
+          phone; the safe-area inset is preserved (added to, not replaced) so it
+          also clears the device system navigation bar on phones. */}
+      <div className="px-3 pt-3 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand ring-1 ring-brand/25">
             {initial}

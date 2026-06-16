@@ -8,25 +8,20 @@ interface LogoProps {
   onClick?: () => void;
 }
 
-/** IB Group badge mark, optionally paired with the wordmark; optionally a Home button. */
+/** IB Chicken Bot badge mark, optionally paired with the wordmark; optionally a Home button. */
 export function Logo({ className, showWord = true, onClick }: LogoProps) {
   const mark = (
     <>
       <img
         src={logoUrl}
-        alt="IB Group"
+        alt="IB Chicken Bot"
         draggable={false}
         className="h-10 w-10 shrink-0 select-none object-contain"
       />
       {showWord && (
-        <div className="leading-none text-left">
-          <div className="display text-[1.05rem] font-semibold tracking-tight text-ink">
-            IB Group
-          </div>
-          <div className="text-[0.68rem] font-medium uppercase tracking-[0.18em] text-ink-faint">
-            Knowledge Assistant
-          </div>
-        </div>
+        <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
+          IB Chicken Bot
+        </span>
       )}
     </>
   );

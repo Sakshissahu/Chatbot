@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  LogOut,
   MessageSquare,
   PanelLeft,
   Search,
@@ -35,7 +34,8 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onSignOut: () => void;
+  /** Open the centered Settings modal (theme + sign out live there now). */
+  onOpenSettings: () => void;
 }
 
 /**
@@ -119,7 +119,7 @@ function SidebarFull({
   onNewChat,
   onSelect,
   onDelete,
-  onSignOut,
+  onOpenSettings,
 }: SidebarProps & { variant: 'desktop' | 'mobile' }) {
   const role = ROLES[roleId];
   const initial = userName.trim().charAt(0).toUpperCase() || '·';
@@ -160,7 +160,7 @@ function SidebarFull({
         <button
           type="button"
           onClick={onNewChat}
-          className="focus-ring flex w-full items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/12 px-3.5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+          className="focus-ring flex w-full items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/12 px-3.5 py-2.5 font-display text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
         >
           <SquarePen className="h-[18px] w-[18px]" strokeWidth={2} />
           New chat
@@ -232,23 +232,15 @@ function SidebarFull({
             <div className="truncate text-sm font-medium text-ink">{userName}</div>
             <div className="truncate text-xs text-ink-faint">{role.label} workspace</div>
           </div>
-          {/* Placeholder — no settings screen yet. TODO: wire when one exists. */}
+          {/* Settings — opens the centered modal (theme + sign out). */}
           <button
             type="button"
+            onClick={onOpenSettings}
             aria-label="Settings"
             title="Settings"
-            className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink-soft"
+            className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <Settings className="h-[18px] w-[18px]" strokeWidth={1.85} />
-          </button>
-          <button
-            type="button"
-            onClick={onSignOut}
-            aria-label="Sign out"
-            title="Sign out"
-            className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-danger/15 hover:text-danger"
-          >
-            <LogOut className="h-[18px] w-[18px]" strokeWidth={1.85} />
           </button>
         </div>
       </div>
@@ -277,8 +269,9 @@ function SidebarRail({ userName, onToggleCollapse, onNewChat }: SidebarProps) {
         <RailButton icon={Search} label="Search chats" onClick={onToggleCollapse} />
       </div>
 
+      {/* Settings is intentionally absent from the rail — it lives in the
+          expanded sidebar footer (open the rail first). */}
       <div className="flex flex-col items-center gap-2">
-        <RailButton icon={Settings} label="Settings" onClick={onToggleCollapse} />
         <button
           type="button"
           onClick={onToggleCollapse}

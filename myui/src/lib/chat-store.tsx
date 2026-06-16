@@ -67,6 +67,8 @@ interface ChatCtx {
   newChat: (roleId: RoleId) => string;
   selectChat: (id: string) => void;
   deleteChat: (id: string) => void;
+  /** Rename a chat. Updates the title locally and persists it (if persisted). */
+  renameChat: (id: string, title: string) => void;
   send: (text: string) => void;
   stop: () => void;
 }
@@ -268,6 +270,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [chats],
   );
 
+  const renameChat = useCallback(
+    (id: string, title: string) => {
+      const clean = title.trim().replace(/\s+/g, ' ').slice(0, 120);
+      if (!clean) return;
+      const target = chats.find((c) => c.id === id);
+      if (!target || target.title === clean) return;
+      // Optimistic local update; persist only if the chat exists server-side
+      // (drafts get their title on first send). Mirrors deleteChat's pattern.
+      setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title: clean } : c)));
+      if (target.persisted) api.renameConversation(id, clean).catch(() => {});
+    },
+    [chats],
+  );
+
   const send = useCallback(
     async (text: string) => {
       const question = text.trim();
@@ -372,6 +388,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       newChat,
       selectChat,
       deleteChat,
+      renameChat,
       send,
       stop,
     }),
@@ -386,6 +403,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       newChat,
       selectChat,
       deleteChat,
+      renameChat,
       send,
       stop,
     ],

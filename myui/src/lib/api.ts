@@ -136,6 +136,15 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   await jsonFetch(`/conversations/${conversationId}`, { method: 'DELETE', headers: headers() });
 }
 
+/** Rename a conversation. Purely a title update — nothing else changes. */
+export async function renameConversation(conversationId: string, title: string): Promise<void> {
+  await jsonFetch(`/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ title }),
+  });
+}
+
 /**
  * Ask a question on a conversation. `onUpdate` fires on every streamed frame
  * with the cumulative answer so the UI renders it live. Resolves with the

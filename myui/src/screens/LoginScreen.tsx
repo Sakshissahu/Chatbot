@@ -121,7 +121,7 @@ export function LoginScreen() {
               <button
                 type="submit"
                 disabled={busy}
-                className="focus-ring group mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-3.5 text-[0.98rem] font-semibold text-[hsl(var(--primary-ink))] shadow-soft transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                className="focus-ring group mt-1 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 py-3.5 font-display text-[0.98rem] font-semibold text-[hsl(var(--primary-ink))] shadow-soft transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {busy ? 'Signing in…' : 'Sign in'}
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />

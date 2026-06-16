@@ -116,6 +116,35 @@ router.delete(
   }),
 );
 
+// PATCH /bff/conversations/:id  { title }  — rename a thread (title only).
+router.patch(
+  '/:id',
+  wrap(async (req, res) => {
+    const title = String(req.body?.title ?? '').trim().slice(0, 120);
+    if (!title) {
+      res.status(400).json({ error: 'A title is required.' });
+      return;
+    }
+    let result;
+    try {
+      result = await pool.query(
+        `update conversations set title = $1
+           where id = $2 and user_id = $3
+         returning id, role, bot_id, title, created_at, updated_at`,
+        [title, req.params.id, req.user!.id],
+      );
+    } catch {
+      res.status(404).end(); // malformed uuid
+      return;
+    }
+    if (!result.rowCount) {
+      res.status(404).json({ error: 'Conversation not found.' });
+      return;
+    }
+    res.json(result.rows[0]);
+  }),
+);
+
 /*
   POST /bff/conversations/:id/messages  { question }   ->  SSE
 

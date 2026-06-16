@@ -1,5 +1,6 @@
-@import '@fontsource-variable/fraunces';
-@import '@fontsource-variable/hanken-grotesk';
+@import '@fontsource-variable/plus-jakarta-sans';
+@import '@fontsource-variable/inter';
+@import '@fontsource/jetbrains-mono';
 
 @tailwind base;
 @tailwind components;

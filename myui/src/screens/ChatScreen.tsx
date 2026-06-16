@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Menu } from 'lucide-react';
-import { Logo } from '@/components/Logo';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { TopBar } from '@/components/TopBar';
 import { Sidebar } from '@/components/Sidebar';
+import { SettingsModal } from '@/components/SettingsModal';
+import { ChatTitleBar } from '@/components/ChatTitleBar';
+import { ProgressiveBlur } from '@/components/ProgressiveBlur';
 import { MessageBubble } from '@/components/MessageBubble';
 import { Composer } from '@/components/Composer';
 import { useChats } from '@/lib/chat-store';
@@ -26,18 +26,19 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
     newChat,
     selectChat,
     deleteChat,
+    renameChat,
     send,
     stop,
   } = useChats();
 
   const [collapsed, setCollapsed] = useState(false); // desktop: full ↔ icon rail
   const [mobileOpen, setMobileOpen] = useState(false); // mobile overlay
+  const [settingsOpen, setSettingsOpen] = useState(false); // centered settings modal
   const endRef = useRef<HTMLDivElement>(null);
 
   const messages = activeChat?.messages ?? [];
   const empty = messages.length === 0;
   const chats = chatsForRole(roleId);
-  const Icon = role.icon;
 
   // A fresh, time-aware greeting on every mount (refresh) and every new chat.
   const greeting = useMemo(() => {
@@ -67,30 +68,26 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
 
   return (
     <div data-role={roleId} className="flex h-dvh flex-col overflow-hidden bg-bg">
-      <TopBar
-        left={
-          <>
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Open menu"
-              className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface/70 text-ink-soft transition-colors hover:text-ink lg:hidden"
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-            <Logo />
-          </>
-        }
-        right={
-          <>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent/14 px-2.5 py-1 text-[0.72rem] font-semibold text-accent ring-1 ring-accent/25">
-              <Icon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{role.label}</span>
-            </span>
-            <ThemeToggle />
-          </>
-        }
-      />
+      {/* Phone top bar — compact & borderless: hamburger + chat name + rename
+          pencil. WEB has no top bar (the icon rail is the only chrome); the web
+          top fade is the ProgressiveBlur inside <main>. */}
+      <header className="relative z-30 flex h-12 shrink-0 items-center gap-1.5 bg-bg px-2 lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open menu"
+          className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <ChatTitleBar
+          title={activeChat?.title ?? 'New chat'}
+          canRename={!!activeChat}
+          onRename={(t) => {
+            if (activeChat) renameChat(activeChat.id, t);
+          }}
+        />
+      </header>
 
       <div className="flex min-h-0 flex-1">
         <Sidebar
@@ -105,14 +102,16 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
           onNewChat={handleNewChat}
           onSelect={handleSelect}
           onDelete={deleteChat}
-          onSignOut={signOut}
+          onOpenSettings={() => {
+            setMobileOpen(false);
+            setSettingsOpen(true);
+          }}
         />
 
         <main className="relative flex min-w-0 flex-1 flex-col">
           {empty ? (
             <HomeView
               greeting={greeting}
-              corpus={role.corpus}
               placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
               busy={busy}
               connectionError={connectionError}
@@ -121,40 +120,57 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
             />
           ) : (
             <>
-              {/* Messages */}
+              {/* WEB ONLY: top fade so messages dissolve under a borderless,
+                  transparent top as they scroll up (the web shell has no top
+                  bar). Hidden on phone. The bottom composer fade is untouched. */}
+              <ProgressiveBlur className="z-10 hidden lg:block" />
+
+              {/* Messages — fills the column. The trailing spacer (and scroll
+                  target) is the height of the floating composer so the last
+                  message always scrolls clear of it. On web, extra top padding
+                  keeps resting content clear of the top fade. */}
               <div className="flex-1 overflow-y-auto">
-                <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+                <div className="mx-auto w-full max-w-3xl px-4 pt-6 sm:px-6 lg:pt-24">
                   {connectionError && <ErrorBanner message={connectionError} />}
                   <div className="space-y-6">
                     <AnimatePresence initial={false}>
                       {messages.map((m) => (
-                        <MessageBubble key={m.id} message={m} icon={Icon} />
+                        <MessageBubble key={m.id} message={m} />
                       ))}
                     </AnimatePresence>
-                    <div ref={endRef} />
                   </div>
+                  <div ref={endRef} className="h-36" />
                 </div>
               </div>
 
-              {/* Composer pinned to the bottom of the message column */}
-              <div className="border-t border-border bg-bg/80 backdrop-blur-xl">
-                <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-3 sm:px-6">
-                  <Composer
-                    busy={busy}
-                    onSend={send}
-                    onStop={stop}
-                    placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
-                  />
-                  <p className="mt-2 text-center text-[0.7rem] text-ink-faint">
-                    Answers come only from the {role.corpus.toLowerCase()} — if it’s not in there,
-                    the assistant will say so.
-                  </p>
+              {/* Floating composer — pinned to the bottom of the column while
+                  scrolling. A soft gradient fade (transparent → page bg) above
+                  it lets content dissolve into the background instead of being
+                  cut by a hard line. The pill itself floats on the page bg with
+                  side + bottom breathing room. */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
+                <div className="h-16 bg-gradient-to-t from-bg to-bg/0" />
+                <div className="bg-bg pb-4">
+                  <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4 sm:px-6">
+                    <Composer
+                      busy={busy}
+                      onSend={send}
+                      onStop={stop}
+                      placeholder={`Ask the ${role.label.toLowerCase()} assistant…`}
+                    />
+                  </div>
                 </div>
               </div>
             </>
           )}
         </main>
       </div>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSignOut={signOut}
+      />
     </div>
   );
 }
@@ -187,10 +203,17 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-/** Home / empty state — centered greeting + composer over a soft IB-brand glow. */
+/**
+ * Home / empty state — greeting over a soft IB-brand glow.
+ *
+ * Desktop: the composer sits centered directly under the greeting (unchanged).
+ * Mobile (<lg): the greeting stays centered up top while the composer is pinned
+ * to the bottom of the screen, matching the in-chat layout. The two composer
+ * placements are mutually exclusive (`lg:block` / `lg:hidden`), so only one is
+ * ever interactive at a given breakpoint.
+ */
 function HomeView({
   greeting,
-  corpus,
   placeholder,
   busy,
   connectionError,
@@ -198,44 +221,53 @@ function HomeView({
   onStop,
 }: {
   greeting: string;
-  corpus: string;
   placeholder: string;
   busy: boolean;
   connectionError: string | null;
   onSend: (text: string) => void;
   onStop: () => void;
 }) {
+  const composer = (
+    <Composer busy={busy} onSend={onSend} onStop={onStop} placeholder={placeholder} />
+  );
+
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 py-10">
+    <div className="relative flex flex-1 flex-col overflow-hidden">
       <HomeGlow />
-      <div className="relative z-10 flex w-full max-w-2xl flex-col items-center">
-        <motion.h1
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease }}
-          className="display text-balance text-center text-3xl font-semibold tracking-tight text-ink sm:text-[2.6rem] sm:leading-[1.1]"
-        >
-          {greeting}
-        </motion.h1>
 
-        {connectionError && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 w-full">
-            <ErrorBanner message={connectionError} />
+      {/* Greeting (+ the desktop composer) — vertically centered as a group. */}
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10">
+        <div className="flex w-full max-w-2xl flex-col items-center">
+          <motion.h1
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease }}
+            className="display text-balance text-center text-3xl font-semibold tracking-tight text-ink sm:text-[2.6rem] sm:leading-[1.1]"
+          >
+            {greeting}
+          </motion.h1>
+
+          {connectionError && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 w-full">
+              <ErrorBanner message={connectionError} />
+            </motion.div>
+          )}
+
+          {/* Desktop: composer centered under the greeting. */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.12, ease }}
+            className="mt-8 hidden w-full lg:block"
+          >
+            {composer}
           </motion.div>
-        )}
+        </div>
+      </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.12, ease }}
-          className="mt-8 w-full"
-        >
-          <Composer busy={busy} onSend={onSend} onStop={onStop} placeholder={placeholder} />
-          <p className="mt-3 text-center text-[0.72rem] text-ink-faint">
-            Answers come only from the {corpus.toLowerCase()} — if it’s not in there, the assistant
-            will say so.
-          </p>
-        </motion.div>
+      {/* Mobile: composer pinned to the bottom (same as the in-chat layout). */}
+      <div className="relative z-10 px-4 pb-4 lg:hidden">
+        <div className="mx-auto w-full max-w-2xl">{composer}</div>
       </div>
     </div>
   );

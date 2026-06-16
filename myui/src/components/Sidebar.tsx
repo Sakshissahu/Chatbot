@@ -1,6 +1,8 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  MessageSquare,
+  MoreHorizontal,
   PanelLeft,
   Search,
   Settings,
@@ -17,6 +19,14 @@ import type { Chat } from '@/lib/chat-store';
 const ease = [0.22, 1, 0.36, 1] as const;
 const RAIL_W = 68; // px — thin icon rail
 const FULL_W = 280; // px — full labelled sidebar
+
+// Shared motion. One critically-damped spring drives the panel geometry (the
+// desktop rail↔full width and the mobile overlay slide) so both share the same
+// premium cadence; it's tuned to settle with no overshoot, so the width never
+// flashes past its target. A short tween cross-fades the rail/full contents.
+const panelSpring = { type: 'spring', stiffness: 420, damping: 44, mass: 1 } as const;
+const contentFade = { duration: 0.16, ease } as const;
+const overlayFade = { duration: 0.2, ease } as const;
 
 interface SidebarProps {
   /** Desktop only: render the thin icon rail instead of the full sidebar. */
@@ -55,7 +65,7 @@ export function Sidebar(props: SidebarProps) {
         aria-label="Chat history"
         initial={false}
         animate={{ width: collapsed ? RAIL_W : FULL_W }}
-        transition={{ duration: 0.34, ease }}
+        transition={panelSpring}
         className="relative hidden shrink-0 overflow-hidden border-r border-border bg-bg-2 lg:block"
       >
         <AnimatePresence initial={false}>
@@ -65,7 +75,7 @@ export function Sidebar(props: SidebarProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, ease }}
+              transition={contentFade}
               className="absolute inset-0"
               style={{ width: RAIL_W }}
             >
@@ -77,7 +87,7 @@ export function Sidebar(props: SidebarProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, ease }}
+              transition={contentFade}
               className="absolute inset-0"
               style={{ width: FULL_W }}
             >
@@ -93,10 +103,10 @@ export function Sidebar(props: SidebarProps) {
           <motion.nav
             key="mobile"
             aria-label="Chat history"
-            initial={{ opacity: 0, x: -18 }}
+            initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -18 }}
-            transition={{ duration: 0.26, ease }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ x: panelSpring, opacity: overlayFade }}
             className="fixed inset-0 z-50 flex flex-col bg-bg lg:hidden"
           >
             <SidebarFull {...props} variant="mobile" />
@@ -126,20 +136,15 @@ function SidebarFull({
 
   return (
     <div className="flex h-full flex-col" style={{ width: variant === 'desktop' ? FULL_W : '100%' }}>
-      {/* Header — brand only on mobile (desktop already shows it in the top bar). */}
+      {/* Header — IB Group brand lockup; the rail shows the same mark, so the
+          logo stays put as the sidebar expands/collapses. */}
       <div className="flex items-center justify-between gap-2 px-3 py-3">
-        {variant === 'mobile' ? (
-          <div className="flex items-center gap-2.5 pl-1">
-            <Logo showWord={false} />
-            <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
-              IB Group
-            </span>
-          </div>
-        ) : (
-          <span className="pl-2 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-ink-faint">
-            Chats
+        <div className="flex items-center gap-2.5 pl-1">
+          <Logo showWord={false} />
+          <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
+            IB Group
           </span>
-        )}
+        </div>
         <button
           type="button"
           onClick={variant === 'mobile' ? onCloseMobile : onToggleCollapse}
@@ -150,7 +155,7 @@ function SidebarFull({
           {variant === 'mobile' ? (
             <X className="h-5 w-5" />
           ) : (
-            <PanelLeft className="h-[18px] w-[18px]" strokeWidth={1.9} />
+            <PanelLeft className="h-[18px] w-[18px]" strokeWidth={2} />
           )}
         </button>
       </div>
@@ -172,7 +177,7 @@ function SidebarFull({
           title="Search isn’t available yet"
           className="flex w-full cursor-default items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm text-ink-faint"
         >
-          <Search className="h-[18px] w-[18px]" strokeWidth={1.9} />
+          <Search className="h-[18px] w-[18px]" strokeWidth={2} />
           <span className="flex-1 text-left">Search chats</span>
         </div>
       </div>
@@ -188,36 +193,16 @@ function SidebarFull({
           </p>
         ) : (
           <ul className="space-y-0.5">
-            {chats.map((c) => {
-              const active = c.id === activeChatId;
-              return (
-                <li key={c.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(c.id)}
-                    className={cn(
-                      'focus-ring flex w-full items-center gap-2 rounded-xl py-2 pl-2.5 pr-9 text-left text-sm transition-colors',
-                      active
-                        ? 'bg-primary/14 font-medium text-ink ring-1 ring-primary/25'
-                        : 'text-ink-soft hover:bg-surface-2/80 hover:text-ink',
-                    )}
-                  >
-                    <MessageSquare
-                      className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'opacity-60')}
-                    />
-                    <span className="truncate">{c.title}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(c.id)}
-                    aria-label="Delete chat"
-                    className="focus-ring absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-ink-faint opacity-100 transition-colors hover:bg-danger/15 hover:text-danger lg:opacity-0 lg:group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              );
-            })}
+            {chats.map((c) => (
+              <ChatRow
+                key={c.id}
+                chat={c}
+                active={c.id === activeChatId}
+                variant={variant}
+                onSelect={onSelect}
+                onDelete={onDelete}
+              />
+            ))}
           </ul>
         )}
       </div>
@@ -240,11 +225,226 @@ function SidebarFull({
             title="Settings"
             className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
           >
-            <Settings className="h-[18px] w-[18px]" strokeWidth={1.85} />
+            <Settings className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+const LONG_PRESS_MS = 500; // intentional hold before the mobile delete appears
+const MOVE_TOLERANCE = 10; // px of finger travel that reclassifies a press as a scroll
+
+/**
+ * A single chat-history row. Selection logic is unchanged (`onSelect`); the
+ * delete trigger differs by surface but always calls the same `onDelete`:
+ *   • mobile (overlay): long-press (~500ms) reveals a red delete button on the
+ *     row; tapping it deletes immediately. A tap dismisses it; scrolling cancels.
+ *   • desktop: a ⋯ button appears on hover/focus and opens a small menu with a
+ *     red Delete. Rendered in a portal so the sidebar's overflow never clips it.
+ */
+function ChatRow({
+  chat,
+  active,
+  variant,
+  onSelect,
+  onDelete,
+}: {
+  chat: Chat;
+  active: boolean;
+  variant: 'desktop' | 'mobile';
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const isMobile = variant === 'mobile';
+  const [open, setOpen] = useState(false); // mobile: delete revealed · desktop: menu open
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+
+  const liRef = useRef<HTMLLIElement>(null);
+  const dotsRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const deleteRef = useRef<HTMLButtonElement>(null);
+
+  // Long-press bookkeeping (mobile only).
+  const timer = useRef<number | null>(null);
+  const pressFired = useRef(false);
+  const startPt = useRef<{ x: number; y: number } | null>(null);
+  const clearTimer = useCallback(() => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, []);
+
+  // Dismiss on outside interaction, Escape, or (desktop) scroll/resize since the
+  // menu is portal-positioned and would otherwise float free of its anchor.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: Event) => {
+      const t = e.target as Node;
+      if (liRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        dotsRef.current?.focus();
+      }
+    };
+    const reposition = () => setOpen(false);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKey);
+    if (!isMobile) {
+      window.addEventListener('scroll', reposition, true);
+      window.addEventListener('resize', reposition);
+    }
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, isMobile]);
+
+  // Move focus onto Delete when the desktop menu opens (keyboard support).
+  useEffect(() => {
+    if (open && !isMobile) deleteRef.current?.focus();
+  }, [open, isMobile]);
+
+  const toggleMenu = () => {
+    const r = dotsRef.current?.getBoundingClientRect();
+    if (r) {
+      const W = 156;
+      const H = 48;
+      const top = r.bottom + 6 + H > window.innerHeight ? r.top - H - 6 : r.bottom + 6;
+      setMenuPos({ top, left: Math.max(8, r.right - W) });
+    }
+    setOpen((o) => !o);
+  };
+
+  const beginPress = (x: number, y: number) => {
+    if (!isMobile) return;
+    pressFired.current = false;
+    startPt.current = { x, y };
+    clearTimer();
+    timer.current = window.setTimeout(() => {
+      pressFired.current = true;
+      setOpen(true);
+      navigator.vibrate?.(12);
+    }, LONG_PRESS_MS);
+  };
+  const maybeCancelPress = (x: number, y: number) => {
+    if (!startPt.current) return;
+    if (Math.hypot(x - startPt.current.x, y - startPt.current.y) > MOVE_TOLERANCE) clearTimer();
+  };
+
+  const handleClick = () => {
+    if (pressFired.current) {
+      // Swallow the click synthesized at the end of a long-press.
+      pressFired.current = false;
+      return;
+    }
+    if (isMobile && open) {
+      setOpen(false); // a plain tap dismisses the revealed delete
+      return;
+    }
+    onSelect(chat.id);
+  };
+
+  return (
+    <li ref={liRef} className="group relative">
+      <button
+        type="button"
+        onClick={handleClick}
+        onTouchStart={(e) => beginPress(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={(e) => maybeCancelPress(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={clearTimer}
+        onTouchCancel={clearTimer}
+        onContextMenu={(e) => {
+          if (isMobile) e.preventDefault();
+        }}
+        className={cn(
+          'focus-ring flex w-full items-center rounded-full py-2 pl-3.5 pr-9 text-left text-sm transition-colors',
+          isMobile && 'select-none [-webkit-touch-callout:none]',
+          active
+            ? 'bg-ink/[0.08] font-medium text-ink'
+            : 'text-ink-soft hover:bg-ink/[0.05] hover:text-ink',
+        )}
+      >
+        <span className="truncate">{chat.title}</span>
+      </button>
+
+      {isMobile ? (
+        // Mobile: red delete revealed by long-press; tap = immediate delete.
+        <AnimatePresence>
+          {open && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.14, ease }}
+              onClick={() => onDelete(chat.id)}
+              aria-label={`Delete chat: ${chat.title}`}
+              className="focus-ring absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-danger/15 text-danger"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={2} />
+            </motion.button>
+          )}
+        </AnimatePresence>
+      ) : (
+        // Desktop: ⋯ on hover/focus opens the menu below.
+        <button
+          ref={dotsRef}
+          type="button"
+          onClick={toggleMenu}
+          aria-label={`Options for chat: ${chat.title}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className={cn(
+            'focus-ring absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg transition-colors hover:bg-ink/[0.10] hover:text-ink focus-visible:opacity-100 group-hover:opacity-100',
+            open ? 'bg-ink/[0.10] text-ink opacity-100' : 'text-ink-faint opacity-0',
+          )}
+        >
+          <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={2} />
+        </button>
+      )}
+
+      {!isMobile &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                ref={menuRef}
+                role="menu"
+                aria-label={`Options for chat: ${chat.title}`}
+                initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                transition={{ duration: 0.14, ease }}
+                style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: 156 }}
+                className="z-[120] origin-top overflow-hidden rounded-xl border border-border bg-surface p-1 shadow-lift"
+              >
+                <button
+                  ref={deleteRef}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    onDelete(chat.id);
+                  }}
+                  className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-danger transition-colors hover:bg-danger/10"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2} />
+                  Delete
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
+    </li>
   );
 }
 
@@ -303,7 +503,7 @@ function RailButton({
       title={label}
       className="focus-ring flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
     >
-      <Icon className="h-[22px] w-[22px]" strokeWidth={1.85} />
+      <Icon className="h-[22px] w-[22px]" strokeWidth={2} />
     </button>
   );
 }

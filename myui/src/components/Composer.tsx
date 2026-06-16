@@ -153,7 +153,7 @@ export function Composer({
                 transition={{ duration: 0.18, ease }}
                 className="focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-[hsl(var(--primary-ink))] shadow-soft transition-[filter,transform] hover:brightness-110 active:scale-95"
               >
-                <ArrowUp className="h-5 w-5" strokeWidth={2.4} />
+                <ArrowUp className="h-5 w-5" strokeWidth={2} />
               </motion.button>
             )}
           </AnimatePresence>

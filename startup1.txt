@@ -40,10 +40,10 @@
 ================================================================
  STEP 3 — Start the Backend (the middle layer)
 ================================================================
-
+run this 
     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\myui-backend
      npm run dev
-
+then this
     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\myui
      npm run dev
 ================================================================

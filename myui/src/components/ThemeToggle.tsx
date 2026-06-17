@@ -8,7 +8,7 @@ export function ThemeToggle() {
 
   return (
     <button
-      onClick={toggle}
+      onClick={(e) => toggle({ x: e.clientX, y: e.clientY })}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       className="focus-ring relative flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface/70 text-ink-soft transition-colors hover:text-ink"
     >

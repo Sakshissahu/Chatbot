@@ -9,7 +9,6 @@ import {
   Settings,
   SquarePen,
   Trash2,
-  X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -100,7 +99,8 @@ export function Sidebar(props: SidebarProps) {
         </AnimatePresence>
       </motion.nav>
 
-      {/* Mobile: full-screen overlay. */}
+      {/* Mobile: drawer that slides in BELOW the persistent top bar (top-12),
+          so the bar's hamburger stays visible and morphs to an X to close. */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.nav
@@ -110,7 +110,7 @@ export function Sidebar(props: SidebarProps) {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ x: panelSpring, opacity: overlayFade }}
-            className="fixed inset-0 z-50 flex flex-col bg-bg lg:hidden"
+            className="fixed inset-x-0 bottom-0 top-12 z-40 flex flex-col bg-bg lg:hidden"
           >
             <SidebarFull {...props} variant="mobile" />
           </motion.nav>
@@ -128,7 +128,6 @@ function SidebarFull({
   activeChatId,
   userName,
   onToggleCollapse,
-  onCloseMobile,
   onNewChat,
   onSelect,
   onDelete,
@@ -140,32 +139,31 @@ function SidebarFull({
 
   return (
     <div className="flex h-full flex-col" style={{ width: variant === 'desktop' ? FULL_W : '100%' }}>
-      {/* Header — IB Chicken Bot brand lockup; the rail shows the same mark, so
-          the logo stays put as the sidebar expands/collapses. */}
-      <div className="flex items-center justify-between gap-2 px-3 py-3">
-        <div className="flex items-center gap-2.5 pl-1">
-          <Logo showWord={false} />
-          <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
-            IB Chicken Bot
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={variant === 'mobile' ? onCloseMobile : onToggleCollapse}
-          aria-label={variant === 'mobile' ? 'Close menu' : 'Collapse sidebar'}
-          title={variant === 'mobile' ? 'Close' : 'Collapse sidebar'}
-          className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
-        >
-          {variant === 'mobile' ? (
-            <X className="h-5 w-5" />
-          ) : (
+      {/* Header — IB Chicken Bot brand lockup + collapse control. Desktop only:
+          on mobile the persistent top bar provides the brand and the close
+          (hamburger→X) control, so the drawer needs no header of its own. */}
+      {variant === 'desktop' && (
+        <div className="flex items-center justify-between gap-2 px-3 py-3">
+          <div className="flex items-center gap-2.5 pl-1">
+            <Logo showWord={false} />
+            <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
+              IB Chicken Bot
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
+          >
             <PanelLeft className="h-[18px] w-[18px]" strokeWidth={2} />
-          )}
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
 
       {/* New chat + search */}
-      <div className="space-y-1 px-3 pb-2">
+      <div className={cn('space-y-1 px-3 pb-2', variant === 'mobile' && 'pt-3')}>
         <button
           type="button"
           onClick={onNewChat}

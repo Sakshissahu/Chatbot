@@ -88,7 +88,7 @@ export function SettingsModal({
                   control. */}
               <button
                 type="button"
-                onClick={toggle}
+                onClick={(e) => toggle({ x: e.clientX, y: e.clientY })}
                 aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 className="focus-ring flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-bg-2/50 px-4 py-3 text-left transition-colors hover:bg-surface"
               >

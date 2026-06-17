@@ -214,3 +214,29 @@
 .answer-prose td {
   @apply border border-border px-3 py-1.5 text-left;
 }
+
+/*
+  Animated light/dark switch — a circular reveal of the new theme via the
+  View Transitions API. The origin (--vt-x/--vt-y) and radius (--vt-r) are set
+  per click in lib/theme.tsx. Unsupported browsers fall back to a plain flip;
+  reduced-motion users skip the animation (gated by the media query below).
+*/
+@keyframes vt-theme-reveal {
+  from {
+    clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 50%));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: none;
+    z-index: 1;
+  }
+  ::view-transition-new(root) {
+    animation: vt-theme-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 9999;
+  }
+}

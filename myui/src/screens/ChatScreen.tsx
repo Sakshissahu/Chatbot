@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Menu } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { SettingsModal } from '@/components/SettingsModal';
 import { AppMenu } from '@/components/AppMenu';
+import { MenuIcon } from '@/components/MenuIcon';
 import { MessageBubble } from '@/components/MessageBubble';
 import { Composer } from '@/components/Composer';
 import { useChats } from '@/lib/chat-store';
@@ -74,14 +75,15 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
       {/* Phone top bar — compact & borderless: hamburger + the BOT name +
           app-level ⋯ menu. Rename now lives in the per-chat menu, not here.
           WEB has no top bar; its ⋯ floats at the top-right of the chat. */}
-      <header className="relative z-30 flex h-12 shrink-0 items-center gap-1.5 bg-bg px-2 lg:hidden">
+      <header className="relative z-50 flex h-12 shrink-0 items-center gap-1.5 bg-bg px-2 lg:hidden">
         <button
           type="button"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Open menu"
+          onClick={() => setMobileOpen((o) => !o)}
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
           className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
         >
-          <Menu className="h-5 w-5" />
+          <MenuIcon open={mobileOpen} />
         </button>
         <span className="min-w-0 flex-1 truncate pl-1 text-sm font-semibold text-ink">
           {BOT_NAME}

@@ -65,8 +65,7 @@ interface VoiceSettings {
 const VOICE_CONFIG: Record<string, VoiceSettings> = {
   'hi-IN': { voiceName: 'hi-IN-Chirp3-HD-Kore', speakingRate: 1.0, pitch: 0.0 }, // Hindi, female
   'en-IN': { voiceName: 'en-IN-Chirp3-HD-Aoede', speakingRate: 1.0, pitch: 0.0 }, // Indian English, female
-  // Add a 3rd language here, e.g.:
-  // 'ta-IN': { voiceName: 'ta-IN-Chirp3-HD-Leda', speakingRate: 1.0, pitch: 0.0 },
+  'gu-IN': { voiceName: 'gu-IN-Chirp3-HD-Leda', speakingRate: 1.0, pitch: 0.0 }, // indian gujrati ,
 };
 
 /*

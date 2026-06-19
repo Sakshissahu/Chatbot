@@ -3,6 +3,7 @@ import { AlertTriangle, Clock } from 'lucide-react';
 import type { ChatMessage } from '@/lib/chat-store';
 import { Markdown } from './Markdown';
 import { Sources } from './Sources';
+import { SpeakerButton } from './SpeakerButton';
 import { TypingIndicator } from './TypingIndicator';
 
 /**
@@ -87,7 +88,12 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
           {message.status === 'streaming' && (
             <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 animate-pulse bg-accent align-middle" />
           )}
-          {message.status === 'done' && <Sources reference={message.reference} />}
+          {message.status === 'done' && (
+            <>
+              <Sources reference={message.reference} />
+              <SpeakerButton message={message} />
+            </>
+          )}
         </>
       )}
     </motion.div>

@@ -4,6 +4,7 @@ import { config, isAllowedOrigin } from './config';
 import { initSchema, pool } from './db';
 import authRoutes from './routes/auth';
 import conversationRoutes from './routes/conversations';
+import voiceRoutes from './routes/voice';
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.get('/bff/health', async (_req, res) => {
 
 app.use('/bff/auth', authRoutes);
 app.use('/bff/conversations', conversationRoutes);
+app.use('/bff/voice', voiceRoutes);
 
 // Central error handler so async route rejections become clean 500s.
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LogOut, Moon, Sun, X } from 'lucide-react';
+import { LogOut, Moon, Sun, Volume2, X } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { useVoicePrefs } from '@/lib/voice';
+import { cn } from '@/lib/cn';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -21,6 +23,7 @@ export function SettingsModal({
   onSignOut: () => void;
 }) {
   const { theme, toggle } = useTheme();
+  const { autoPlay, setAutoPlay } = useVoicePrefs();
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // Esc to close, and move focus into the dialog when it opens.
@@ -115,6 +118,42 @@ export function SettingsModal({
                   >
                     {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                   </motion.span>
+                </span>
+              </button>
+
+              {/* Auto-play responses — read a new answer aloud once as it
+                  finishes. Off by default; the per-message speaker button works
+                  regardless of this toggle. */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoPlay}
+                onClick={() => setAutoPlay(!autoPlay)}
+                aria-label={autoPlay ? 'Turn off auto-play responses' : 'Turn on auto-play responses'}
+                className="focus-ring flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-bg-2/50 px-4 py-3 text-left transition-colors hover:bg-surface"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-ink-soft">
+                    <Volume2 className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">Auto-play responses</span>
+                    <span className="block text-xs text-ink-faint">Read new answers aloud</span>
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors',
+                    autoPlay ? 'bg-primary' : 'bg-surface-2 ring-1 ring-inset ring-border',
+                  )}
+                >
+                  <motion.span
+                    initial={false}
+                    animate={{ x: autoPlay ? 20 : 0 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                    className="h-5 w-5 rounded-full bg-[hsl(var(--primary-ink))] shadow-soft"
+                  />
                 </span>
               </button>
 

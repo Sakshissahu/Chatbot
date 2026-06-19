@@ -43,6 +43,12 @@ export const config = {
     farmer: required('FARMER_BOT_ID'),
     employee: required('EMPLOYEE_BOT_ID'),
   } as Record<RoleId, string>,
+  // Google Cloud Speech (STT + TTS) over the REST API, authenticated with a
+  // plain API key (?key=...). Optional: left blank, voice is disabled and the
+  // /bff/voice routes return a graceful "voice_not_configured" response.
+  googleSpeech: {
+    apiKey: (process.env.GOOGLE_SPEECH_API_KEY ?? '').trim(),
+  },
 };
 
 const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

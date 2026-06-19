@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ThemeProvider } from '@/lib/theme';
+import { VoiceProvider } from '@/lib/voice';
 import { AuthProvider } from '@/lib/auth';
 import { ChatProvider } from '@/lib/chat-store';
 import './index.css';
@@ -9,11 +10,13 @@ import './index.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
-      <AuthProvider>
-        <ChatProvider>
-          <App />
-        </ChatProvider>
-      </AuthProvider>
+      <VoiceProvider>
+        <AuthProvider>
+          <ChatProvider>
+            <App />
+          </ChatProvider>
+        </AuthProvider>
+      </VoiceProvider>
     </ThemeProvider>
   </StrictMode>,
 );

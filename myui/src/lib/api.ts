@@ -76,6 +76,13 @@ export interface AskUpdate {
 
 export class ApiError extends Error {}
 
+/** Thrown when the backend has no Google Speech key — voice is disabled. */
+export class VoiceNotConfiguredError extends ApiError {
+  constructor() {
+    super('voice_not_configured');
+  }
+}
+
 // --- session persistence (set on login, cleared on logout) ---
 //
 // A session = the opaque token + the minimal user it belongs to. "Remember me"
@@ -283,4 +290,69 @@ export async function sendMessage(
     reader.releaseLock();
   }
   return { answer, reference };
+}
+
+// --- voice (Google Speech via the backend) ------------------------------------
+//
+// Both endpoints answer { error: "voice_not_configured" } when the backend has
+// no Google Speech key; we surface that as VoiceNotConfiguredError so the UI can
+// show a friendly notice instead of a raw failure.
+
+/** Read an { error } string from a failed response, if present. */
+async function errorField(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: string };
+    return body?.error ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Transcribe recorded speech to text (Google STT). `audioBase64` is the raw
+ * base64 payload (no data: prefix); `mimeType` is the recorder's container so
+ * the backend can match the audio encoding.
+ */
+export async function transcribeAudio(audioBase64: string, mimeType: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/voice/stt`, {
+      method: 'POST',
+      headers: headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ audio: audioBase64, mimeType }),
+    });
+  } catch {
+    throw new ApiError('Could not reach the server. Is the backend running?');
+  }
+  if (!res.ok) {
+    const err = await errorField(res);
+    if (err === 'voice_not_configured') throw new VoiceNotConfiguredError();
+    throw new ApiError(err ?? `Could not transcribe the recording (${res.status}).`);
+  }
+  const data = (await res.json()) as { text?: string };
+  return (data.text ?? '').trim();
+}
+
+/**
+ * Synthesize speech for `text` (Google TTS) and return a playable object URL for
+ * the MP3. The caller owns the URL and should revoke it when done.
+ */
+export async function synthesizeSpeech(text: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/voice/tts`, {
+      method: 'POST',
+      headers: headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ text }),
+    });
+  } catch {
+    throw new ApiError('Could not reach the server. Is the backend running?');
+  }
+  if (!res.ok) {
+    const err = await errorField(res);
+    if (err === 'voice_not_configured') throw new VoiceNotConfiguredError();
+    throw new ApiError(err ?? `Could not play this message (${res.status}).`);
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }

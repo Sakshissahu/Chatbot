@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUp, Mic, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, Info, Loader2, Mic, Paperclip, Plus, Square, X } from 'lucide-react';
+import { transcribeAudio, VoiceNotConfiguredError } from '@/lib/api';
+import { UnsupportedRecordingError, VoiceRecorder, type Recording } from '@/lib/recorder';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
+/** Auto-stop a forgotten recording so the upload can't grow unbounded. */
+const MAX_RECORDING_MS = 60_000;
+
 /**
- * Message composer. The send/stream contract is unchanged: auto-grow textarea,
- * Enter-to-send (Shift+Enter for newline), a Stop button while streaming, and
- * `onSend(text)` on submit.
+ * Message composer. The text send/stream contract is unchanged: auto-grow
+ * textarea, Enter-to-send (Shift+Enter for newline), a Stop button while
+ * streaming, and `onSend(text)` on submit.
  *
- * The "+" attach and mic buttons are intentionally UI-only — neither is wired
- * to the backend (the BFF `send` accepts a text question only). Attaching a
- * file just surfaces its name as a chip; nothing is uploaded. See the TODOs.
+ * The mic is wired to speech-to-text: tap to record, tap again to transcribe
+ * into the input for review (we never auto-send — the send/stream path above is
+ * untouched). The "+" attach button stays UI-only: the BFF chat endpoint takes
+ * text, so a chosen file just surfaces its name as a chip; nothing is uploaded.
  */
 export function Composer({
   busy,
@@ -26,8 +32,12 @@ export function Composer({
 }) {
   const [value, setValue] = useState('');
   const [attachment, setAttachment] = useState<string | null>(null);
+  const [recState, setRecState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<VoiceRecorder | null>(null);
+  const autoStopRef = useRef<number | null>(null);
 
   // auto-grow
   useEffect(() => {
@@ -55,6 +65,78 @@ export function Composer({
     e.target.value = ''; // allow re-picking the same file
   };
 
+  // --- voice input (speech-to-text) ---
+  const clearAutoStop = () => {
+    if (autoStopRef.current !== null) {
+      clearTimeout(autoStopRef.current);
+      autoStopRef.current = null;
+    }
+  };
+
+  const stopRecording = async () => {
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+    recorderRef.current = null;
+    clearAutoStop();
+    setRecState('transcribing');
+
+    let recording: Recording;
+    try {
+      recording = await recorder.stop();
+    } catch {
+      setRecState('idle');
+      setVoiceNote('Couldn’t capture the recording. Please try again.');
+      return;
+    }
+
+    try {
+      const text = await transcribeAudio(recording.base64, recording.mimeType);
+      if (text) {
+        // Drop the transcript into the input for review — never auto-send.
+        setValue((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+        requestAnimationFrame(() => ref.current?.focus());
+      } else {
+        setVoiceNote('Didn’t catch that — please try again.');
+      }
+    } catch (err) {
+      if (err instanceof VoiceNotConfiguredError) {
+        setVoiceNote('Voice isn’t set up yet.');
+      } else {
+        setVoiceNote(err instanceof Error ? err.message : 'Couldn’t transcribe the recording.');
+      }
+    } finally {
+      setRecState('idle');
+    }
+  };
+
+  const startRecording = async () => {
+    if (busy || recState !== 'idle') return;
+    setVoiceNote(null);
+    const recorder = new VoiceRecorder();
+    try {
+      await recorder.start();
+    } catch (err) {
+      if (err instanceof UnsupportedRecordingError) {
+        setVoiceNote('Voice input isn’t supported in this browser.');
+      } else {
+        setVoiceNote('Microphone access was blocked. Allow it in your browser settings to use voice.');
+      }
+      return;
+    }
+    recorderRef.current = recorder;
+    setRecState('recording');
+    autoStopRef.current = window.setTimeout(() => void stopRecording(), MAX_RECORDING_MS);
+  };
+
+  // Abort any in-flight recording if the composer unmounts.
+  useEffect(() => {
+    return () => {
+      clearAutoStop();
+      recorderRef.current?.cancel();
+      recorderRef.current = null;
+    };
+  }, []);
+
   const iconBtn =
     'focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink';
 
@@ -81,6 +163,49 @@ export function Composer({
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Voice status — recording / transcribing / inline notice. */}
+      <AnimatePresence initial={false}>
+        {(recState !== 'idle' || voiceNote) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease }}
+            className="overflow-hidden"
+          >
+            <div className="mx-1 mb-1.5 flex items-center gap-2 rounded-xl border border-border bg-surface-2/70 px-3 py-1.5 text-xs text-ink-soft">
+              {recState === 'recording' ? (
+                <>
+                  <span aria-hidden className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-danger/60 motion-safe:animate-ping" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-danger" />
+                  </span>
+                  <span className="min-w-0 flex-1">Listening… tap the mic to stop.</span>
+                </>
+              ) : recState === 'transcribing' ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ink-faint" />
+                  <span className="min-w-0 flex-1">Transcribing…</span>
+                </>
+              ) : (
+                <>
+                  <Info className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                  <span className="min-w-0 flex-1">{voiceNote}</span>
+                  <button
+                    type="button"
+                    onClick={() => setVoiceNote(null)}
+                    aria-label="Dismiss"
+                    className="focus-ring shrink-0 rounded-md p-0.5 text-ink-faint transition-colors hover:text-ink"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
             </div>
           </motion.div>
         )}
@@ -121,13 +246,38 @@ export function Composer({
           className="max-h-44 flex-1 resize-none self-center bg-transparent px-2 py-2.5 text-[0.95rem] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none"
         />
 
-        {/* Mic (UI-only) — hidden while streaming. */}
-        {/* TODO: could be wired to the Web Speech API client-side later. */}
-        {!busy && (
-          <button type="button" aria-label="Voice input" title="Voice input (coming soon)" className={iconBtn}>
-            <Mic className="h-5 w-5" strokeWidth={2} />
-          </button>
-        )}
+        {/* Mic — tap to record, tap again to transcribe into the input.
+            Hidden while an answer is streaming. */}
+        {!busy &&
+          (recState === 'recording' ? (
+            <button
+              type="button"
+              onClick={() => void stopRecording()}
+              aria-label="Stop recording"
+              title="Stop recording"
+              className="focus-ring relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25"
+            >
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full bg-danger/25 motion-safe:animate-ping"
+              />
+              <Square className="relative h-4 w-4 fill-current" />
+            </button>
+          ) : recState === 'transcribing' ? (
+            <div className={`${iconBtn} pointer-events-none`} role="status" aria-label="Transcribing">
+              <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void startRecording()}
+              aria-label="Voice input"
+              title="Voice input"
+              className={iconBtn}
+            >
+              <Mic className="h-5 w-5" strokeWidth={2} />
+            </button>
+          ))}
 
         {/* Send / Stop */}
         {busy ? (

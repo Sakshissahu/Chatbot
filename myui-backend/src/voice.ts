@@ -199,9 +199,10 @@ function postSynthesis(body: string, voice: Voice, audioConfig: AudioConfig): Pr
 }
 
 // Primary language plus auto-detect across India's major languages. Google's v1
-// recognizer accepts a primary languageCode plus up to 3 alternativeLanguageCodes,
-// so we send the top three from this list; the full set is kept for reference and
-// easy reordering (Hindi, Bengali, Tamil lead by number of speakers).
+// recognizer accepts a primary languageCode plus up to 3 alternativeLanguageCodes.
+// en-IN stays primary and hi-IN is always an alternate; the user's preferred
+// voice-input language takes the next slot, then this list fills the remainder.
+// The full set is kept for reference and as the fallback source.
 const STT_PRIMARY_LANGUAGE = 'en-IN';
 const STT_ALTERNATIVE_LANGUAGES = ['hi-IN', 'bn-IN', 'ta-IN', 'te-IN', 'mr-IN', 'gu-IN', 'kn-IN', 'pa-IN'];
 const STT_MAX_ALTERNATIVES = 3;
@@ -216,11 +217,39 @@ function encodingFor(mimeType: string | undefined): string {
 
 export interface TranscribeOptions {
   mimeType?: string;
+  /** The user's chosen voice-input language; used as a recognizer hint. */
+  preferredLanguage?: string;
 }
 
 /** Transcribe base64-encoded audio to text. Returns '' if nothing recognized. */
 export async function transcribe(audioBase64: string, opts: TranscribeOptions = {}): Promise<string> {
   const content = audioBase64.replace(/^data:[^;]+;base64,/, '');
+  // Pick the recognizer's PRIMARY language. v1 speech:recognize strongly favours
+  // the primary `languageCode` and treats alternativeLanguageCodes only as weak
+  // fallbacks, so a non-English pick (e.g. gu-IN) only wins reliably when it IS
+  // the primary. So when the user has chosen a non-English language we send THAT
+  // as primary for best recognition, with English + Hindi riding along as
+  // alternates; otherwise we keep en-IN primary and auto-detect across the
+  // standing Indic list. This is a v1 stopgap pending the Chirp 2 v2 migration,
+  // which handles language hints far better and drops this single-primary bias.
+  const preferred = opts.preferredLanguage;
+  let languageCode: string;
+  let alternativeLanguageCodes: string[];
+  if (preferred && preferred !== STT_PRIMARY_LANGUAGE) {
+    languageCode = preferred;
+    alternativeLanguageCodes = [
+      ...new Set([STT_PRIMARY_LANGUAGE, 'hi-IN'].filter((l) => l !== languageCode)),
+    ].slice(0, STT_MAX_ALTERNATIVES);
+  } else {
+    languageCode = STT_PRIMARY_LANGUAGE;
+    alternativeLanguageCodes = [
+      ...new Set(
+        ['hi-IN', preferred, ...STT_ALTERNATIVE_LANGUAGES].filter(
+          (l): l is string => Boolean(l) && l !== STT_PRIMARY_LANGUAGE,
+        ),
+      ),
+    ].slice(0, STT_MAX_ALTERNATIVES);
+  }
   const res = await fetch(`${STT_URL}?key=${encodeURIComponent(config.googleSpeech.apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -233,13 +262,14 @@ export async function transcribe(audioBase64: string, opts: TranscribeOptions = 
         // (0) not in supported rates"), and a value that disagrees with the
         // stream silently yields an empty transcript. Do not omit this.
         sampleRateHertz: 48000,
-        languageCode: STT_PRIMARY_LANGUAGE,
-        alternativeLanguageCodes: STT_ALTERNATIVE_LANGUAGES.slice(0, STT_MAX_ALTERNATIVES),
-        // Accuracy: "latest_long" is tuned for natural, conversational speech;
-        // useEnhanced opts into the enhanced recognizer; automatic punctuation
-        // makes transcripts read cleanly.
-        model: 'latest_long',
-        useEnhanced: true,
+        languageCode,
+        alternativeLanguageCodes,
+        // Model: use "default" because it supports the multilingual Indic
+        // alternates we send (Gujarati gu-IN, etc.) that the enhanced /
+        // "latest_long" models do NOT — those force-fit unsupported-language
+        // audio into en/hi and return garbage. Automatic punctuation makes
+        // transcripts read cleanly.
+        model: 'default',
         enableAutomaticPunctuation: true,
       },
       audio: { content },

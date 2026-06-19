@@ -170,12 +170,20 @@ async function jsonFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
-/** Dummy login: any username proceeds. Returns a session token + user. */
-export async function login(username: string, role?: RoleId): Promise<{ token: string; user: ApiUser }> {
+/**
+ * Log in with a username (free-form) and password. The password is only checked
+ * by the backend when a shared demo password is configured there; otherwise any
+ * username proceeds. Returns a session token + user.
+ */
+export async function login(
+  username: string,
+  password: string,
+  role?: RoleId,
+): Promise<{ token: string; user: ApiUser }> {
   return jsonFetch('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, role }),
+    body: JSON.stringify({ username, password, role }),
   });
 }
 
@@ -311,15 +319,21 @@ async function errorField(res: Response): Promise<string | null> {
 /**
  * Transcribe recorded speech to text (Google STT). `audioBase64` is the raw
  * base64 payload (no data: prefix); `mimeType` is the recorder's container so
- * the backend can match the audio encoding.
+ * the backend can match the audio encoding. `preferredLanguage` is the user's
+ * chosen voice-input language; the backend uses it as a recognizer hint
+ * alongside English and Hindi.
  */
-export async function transcribeAudio(audioBase64: string, mimeType: string): Promise<string> {
+export async function transcribeAudio(
+  audioBase64: string,
+  mimeType: string,
+  preferredLanguage?: string,
+): Promise<string> {
   let res: Response;
   try {
     res = await fetch(`${BASE}/voice/stt`, {
       method: 'POST',
       headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ audio: audioBase64, mimeType }),
+      body: JSON.stringify({ audio: audioBase64, mimeType, preferredLanguage }),
     });
   } catch {
     throw new ApiError('Could not reach the server. Is the backend running?');

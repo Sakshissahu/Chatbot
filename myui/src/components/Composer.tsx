@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowUp, Info, Loader2, Mic, Paperclip, Plus, Square, X } from 'lucide-react';
 import { transcribeAudio, VoiceNotConfiguredError } from '@/lib/api';
 import { UnsupportedRecordingError, VoiceRecorder, type Recording } from '@/lib/recorder';
+import { useVoicePrefs } from '@/lib/voice';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -30,6 +31,7 @@ export function Composer({
   onStop: () => void;
   placeholder: string;
 }) {
+  const { sttLanguage } = useVoicePrefs();
   const [value, setValue] = useState('');
   const [attachment, setAttachment] = useState<string | null>(null);
   const [recState, setRecState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
@@ -90,7 +92,7 @@ export function Composer({
     }
 
     try {
-      const text = await transcribeAudio(recording.base64, recording.mimeType);
+      const text = await transcribeAudio(recording.base64, recording.mimeType, sttLanguage);
       if (text) {
         // Drop the transcript into the input for review — never auto-send.
         setValue((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));

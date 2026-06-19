@@ -1,11 +1,25 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LogOut, Moon, Sun, Volume2, X } from 'lucide-react';
+import { ChevronDown, Languages, LogOut, Moon, Sun, Volume2, X } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
-import { useVoicePrefs } from '@/lib/voice';
+import { useVoicePrefs, type SttLanguage } from '@/lib/voice';
 import { cn } from '@/lib/cn';
 
 const ease = [0.22, 1, 0.36, 1] as const;
+
+/** Voice-input language choices — the language the user speaks to the microphone. */
+const VOICE_LANGUAGES: { value: SttLanguage; label: string }[] = [
+  { value: 'en-IN', label: 'English' },
+  { value: 'hi-IN', label: 'Hindi' },
+  { value: 'gu-IN', label: 'Gujarati' },
+  { value: 'bn-IN', label: 'Bengali' },
+  { value: 'mr-IN', label: 'Marathi' },
+  { value: 'ta-IN', label: 'Tamil' },
+  { value: 'te-IN', label: 'Telugu' },
+  { value: 'kn-IN', label: 'Kannada' },
+  { value: 'pa-IN', label: 'Punjabi' },
+  { value: 'ml-IN', label: 'Malayalam' },
+];
 
 /**
  * Centered settings dialog — identical on phone and web, layered above the
@@ -23,7 +37,7 @@ export function SettingsModal({
   onSignOut: () => void;
 }) {
   const { theme, toggle } = useTheme();
-  const { autoPlay, setAutoPlay } = useVoicePrefs();
+  const { autoPlay, setAutoPlay, sttLanguage, setSttLanguage } = useVoicePrefs();
   const closeRef = useRef<HTMLButtonElement>(null);
 
   // Esc to close, and move focus into the dialog when it opens.
@@ -156,6 +170,42 @@ export function SettingsModal({
                   />
                 </span>
               </button>
+
+              {/* Voice language — the language the user will speak to the
+                  microphone (one language per session), passed to speech-to-text
+                  as the primary language. Native <select> so its list escapes the
+                  modal's overflow-hidden clip. */}
+              <label className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-bg-2/50 px-4 py-3 text-left transition-colors hover:bg-surface">
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-ink-soft">
+                    <Languages className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">I&apos;m speaking in:</span>
+                    <span className="block text-xs text-ink-faint">
+                      Language you&apos;ll speak to the microphone
+                    </span>
+                  </span>
+                </span>
+                <span className="relative shrink-0">
+                  <select
+                    value={sttLanguage}
+                    onChange={(e) => setSttLanguage(e.target.value as SttLanguage)}
+                    aria-label="Voice input language"
+                    className="focus-ring cursor-pointer appearance-none rounded-xl border border-border bg-surface/70 py-2 pl-3 pr-8 text-sm font-medium text-ink transition-colors hover:bg-surface"
+                  >
+                    {VOICE_LANGUAGES.map((l) => (
+                      <option key={l.value} value={l.value}>
+                        {l.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    aria-hidden
+                    className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint"
+                  />
+                </span>
+              </label>
 
               {/* Sign out — uses the existing auth logout. */}
               <button

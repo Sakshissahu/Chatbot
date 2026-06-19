@@ -43,7 +43,7 @@ router.post(
   }),
 );
 
-// POST /bff/voice/stt  { audio: <base64>, mimeType? }  ->  { text }
+// POST /bff/voice/stt  { audio: <base64>, mimeType?, preferredLanguage? }  ->  { text }
 router.post(
   '/stt',
   wrap(async (req, res) => {
@@ -57,8 +57,10 @@ router.post(
       return;
     }
     const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType : undefined;
+    const preferredLanguage =
+      typeof req.body?.preferredLanguage === 'string' ? req.body.preferredLanguage : undefined;
     try {
-      const text = await transcribe(audio, { mimeType });
+      const text = await transcribe(audio, { mimeType, preferredLanguage });
       res.json({ text });
     } catch (err) {
       res.status(502).json({ error: `Speech recognition failed: ${(err as Error).message}` });

@@ -1,12 +1,14 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { login as apiLogin, saveSession, loadSession, clearSession } from '@/lib/api';
+import * as ttsCache from '@/lib/tts-cache';
 
 /*
   Auth state — backed by the chat backend.
 
-  Login is still "dummy" (any username proceeds, no password check), but it now
-  POSTs to the backend, which find-or-creates the user and returns a session
-  token. We capture the user id/username from that response.
+  Login keeps a free-form username (find-or-create), but POSTs to the backend
+  which may enforce a shared demo password before find-or-creating the user and
+  returning a session token. When the backend has no demo password configured,
+  any username still proceeds. We capture the user id/username from the response.
 
   The session (token + user) is persisted so it survives a reload, and the
   `remember` flag decides where: localStorage when the user opts to stay signed
@@ -37,14 +39,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the login screen flash. loadSession also re-activates the in-memory token.
   const [user, setUser] = useState<AuthUser | null>(() => loadSession()?.user ?? null);
 
-  // Dummy auth: trust the username, ignore the password — but go through the
-  // backend so the user is captured and a session token is issued. Rejects if
-  // the backend is unreachable, which the login screen surfaces. `remember`
-  // chooses local vs session storage for the issued token (default: off).
-  const login = useCallback(async (name: string, _password: string, remember = false) => {
+  // Trust the username (find-or-create) but forward the password so the backend
+  // can enforce a shared demo password when one is configured. Rejects if the
+  // backend is unreachable or the password is wrong, which the login screen
+  // surfaces. `remember` chooses local vs session storage for the issued token
+  // (default: off).
+  const login = useCallback(async (name: string, password: string, remember = false) => {
     const clean = name.trim();
     if (!clean) return;
-    const { token, user: u } = await apiLogin(clean);
+    const { token, user: u } = await apiLogin(clean, password);
     const authUser: AuthUser = { id: u.id, name: u.username };
     saveSession({ token, user: authUser }, remember);
     setUser(authUser);
@@ -52,6 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearSession();
+    // Free every cached answer's audio so a new user never inherits the
+    // previous user's synthesized speech (the cache is the URLs' only owner).
+    ttsCache.clear();
     setUser(null);
   }, []);
 

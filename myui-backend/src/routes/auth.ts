@@ -1,15 +1,18 @@
 import { Router } from 'express';
 import { pool } from '../db';
-import { isRole } from '../config';
+import { config, isRole } from '../config';
 import { wrap } from '../http';
 
 const router = Router();
 
 /*
-  POST /bff/auth/login  { username, role? }
-  Dummy login: no password check. Find-or-create the user by (case-insensitive)
-  username, optionally record the chosen role, and return a session token the
-  frontend uses for subsequent calls. The token is the user id for now.
+  POST /bff/auth/login  { username, password?, role? }
+  Username-only login, optionally gated by a shared demo password
+  (config.demoPassword / DEMO_PASSWORD). When that is set the request must carry
+  the matching password; when blank, any username proceeds as before.
+  Find-or-create the user by (case-insensitive) username, optionally record the
+  chosen role, and return a session token the frontend uses for subsequent
+  calls. The token is the user id for now.
 */
 router.post(
   '/login',
@@ -17,6 +20,12 @@ router.post(
     const username = String(req.body?.username ?? '').trim();
     if (!username) {
       res.status(400).json({ error: 'A username is required.' });
+      return;
+    }
+    // Shared demo password gate: only enforced when DEMO_PASSWORD is set.
+    // Blank (the default) leaves login username-only, as before.
+    if (config.demoPassword && req.body?.password !== config.demoPassword) {
+      res.status(401).json({ error: 'Incorrect password.' });
       return;
     }
     const role = isRole(req.body?.role) ? req.body.role : null;

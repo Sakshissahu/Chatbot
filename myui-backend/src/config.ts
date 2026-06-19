@@ -31,6 +31,10 @@ function parseOrigins(raw: string | undefined): string[] {
 export const config = {
   port: Number(process.env.PORT ?? 8088),
   databaseUrl: required('DATABASE_URL'),
+  // Optional shared demo password gate. When set, login requires this exact
+  // value; left blank (the default), no password check runs and any username
+  // proceeds — preserving local-dev behavior.
+  demoPassword: (process.env.DEMO_PASSWORD ?? '').trim(),
   allowedOrigins: (() => {
     const fromEnv = parseOrigins(process.env.ALLOWED_ORIGIN ?? process.env.CORS_ORIGIN);
     return fromEnv.length ? fromEnv : DEFAULT_ALLOWED_ORIGINS;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Square, Volume2 } from 'lucide-react';
 import { synthesizeSpeech, VoiceNotConfiguredError } from '@/lib/api';
 import { useVoicePrefs } from '@/lib/voice';
+import * as ttsCache from '@/lib/tts-cache';
 import type { ChatMessage } from '@/lib/chat-store';
 
 type Status = 'idle' | 'loading' | 'playing' | 'unconfigured' | 'error';
@@ -47,11 +48,13 @@ export function SpeakerButton({ message }: { message: ChatMessage }) {
   const { autoPlay } = useVoicePrefs();
   const [status, setStatus] = useState<Status>('idle');
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const urlRef = useRef<string | null>(null);
 
   const speech = useMemo(() => stripForSpeech(message.content), [message.content]);
 
-  // Tear down audio + object URL on unmount.
+  // Stop audio on unmount. The synthesized object URL is owned by the TTS cache
+  // (keyed by message id, revoked only on logout via clear()), so we never
+  // revoke it here — doing so would break replay when this bubble remounts
+  // (e.g. switching chats) while the URL is still cached.
   useEffect(() => {
     return () => {
       const a = audioRef.current;
@@ -59,7 +62,6 @@ export function SpeakerButton({ message }: { message: ChatMessage }) {
         a.pause();
         if (currentAudio === a) currentAudio = null;
       }
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     };
   }, []);
 
@@ -85,13 +87,21 @@ export function SpeakerButton({ message }: { message: ChatMessage }) {
 
     setStatus('loading');
     try {
-      if (!urlRef.current) urlRef.current = await synthesizeSpeech(speech);
+      // Synthesize at most once per message per session: reuse the cached object
+      // URL on replay (and when the auto-play path already populated it) instead
+      // of re-hitting — and re-billing — the TTS API. Auto-play and manual taps
+      // share this one cache because both flow through here.
+      let url = ttsCache.get(message.id);
+      if (!url) {
+        url = await synthesizeSpeech(speech);
+        ttsCache.set(message.id, url);
+      }
 
       if (currentAudio && currentAudio !== audioRef.current) currentAudio.pause();
 
       let a = audioRef.current;
       if (!a) {
-        a = new Audio(urlRef.current);
+        a = new Audio(url);
         audioRef.current = a;
         a.onended = () => {
           if (currentAudio === a) currentAudio = null;

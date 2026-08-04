@@ -14,11 +14,11 @@ export const ROLE_LABELS: Record<RoleId, string> = {
 };
 
 // Comma-separated list of allowed browser origins for CORS. Entries may use a
-// single `*` wildcard for one label, e.g. `https://*.vercel.app` matches any
-// Vercel deploy URL. ALLOWED_ORIGIN is the canonical name; CORS_ORIGIN is kept
-// as a backwards-compatible fallback. The default covers Vite dev + Vercel so
-// the per-demo helper never has to touch backend config when the tunnel
-// (frontend → backend URL) rotates.
+// single `*` wildcard for one label, e.g. `https://*.example.app` matches any
+// subdomain of that host. ALLOWED_ORIGIN is the canonical name; CORS_ORIGIN is
+// kept as a backwards-compatible fallback. The default covers the Vite dev
+// origin plus a wildcard host so the backend config rarely needs changing when
+// the frontend's URL changes.
 const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173', 'https://*.vercel.app'];
 
 function parseOrigins(raw: string | undefined): string[] {
@@ -59,8 +59,8 @@ const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 /**
  * True if `origin` matches one of the configured allowed origins. A `*` in a
- * pattern matches a single host label (no dots), so `https://*.vercel.app`
- * matches `https://myui-abc.vercel.app` but not a deeper subdomain.
+ * pattern matches a single host label (no dots), so `https://*.example.app`
+ * matches `https://myui-abc.example.app` but not a deeper subdomain.
  */
 export function isAllowedOrigin(origin: string): boolean {
   const o = origin.replace(/\/+$/, '');

@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import { config, isAllowedOrigin } from './config';
 import { initSchema, pool } from './db';
 import authRoutes from './routes/auth';
@@ -9,8 +12,8 @@ import voiceRoutes from './routes/voice';
 const app = express();
 
 // CORS. In local dev the browser reaches us same-origin via the Vite /bff
-// proxy, so no CORS header is needed. In the deployed demo the frontend lives
-// on Vercel and reaches us cross-origin through a Cloudflare tunnel, so we must
+// proxy, so no CORS header is needed. In a deployed setup the frontend is
+// served from another origin and reaches us cross-origin, so we must
 // reflect the caller's Origin when it is allow-listed (config.allowedOrigins,
 // from ALLOWED_ORIGIN). Requests with no Origin (curl, health probes,
 // server-to-server) are always permitted. We use a function form so the exact
@@ -49,6 +52,23 @@ app.get('/bff/health', async (_req, res) => {
 app.use('/bff/auth', authRoutes);
 app.use('/bff/conversations', conversationRoutes);
 app.use('/bff/voice', voiceRoutes);
+
+// Single-port mode: if the frontend has been built (myui/dist exists), serve it
+// from this same server so ONE port hosts both the UI and the /bff API
+// (same-origin, no CORS). If dist is absent (pure dev), this is skipped and the
+// Vite dev server on :5173 proxies /bff here instead. Build with:
+//   cd myui && npm run build
+const clientDist = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../myui/dist');
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  // SPA fallback: any non-/bff GET returns index.html so client-side routing works.
+  app.get(/^\/(?!bff\/).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+  console.log(`[static] serving frontend from ${clientDist}`);
+} else {
+  console.log('[static] no myui/dist build found — API-only (use the Vite dev server for the UI)');
+}
 
 // Central error handler so async route rejections become clean 500s.
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

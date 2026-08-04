@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { ChatScreen } from '@/screens/ChatScreen';
 import { useAuth } from '@/lib/auth';
 import { useChats } from '@/lib/chat-store';
+import { useAppHeight } from '@/lib/use-app-height';
 import { NavProvider, type NavCtx, type Screen } from '@/lib/nav';
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -22,6 +23,9 @@ const ROLE = 'farmer' as const;
 export default function App() {
   const { user, login, logout } = useAuth();
   const { enterRole } = useChats();
+  // Keep --app-height tracking the visible viewport across both screens so the
+  // shell follows the mobile keyboard (see use-app-height).
+  useAppHeight();
   // A remembered session is restored synchronously in AuthProvider, so a
   // returning user starts in the chat and skips login.
   const [screen, setScreen] = useState<Screen>(user ? 'chat' : 'login');
@@ -67,18 +71,23 @@ export default function App() {
 
   return (
     <NavProvider value={nav}>
-      <AnimatePresence mode="wait">
-        {screen === 'login' && (
-          <motion.div key="login" {...fade}>
-            <LoginScreen />
-          </motion.div>
-        )}
-        {screen === 'chat' && (
-          <motion.div key="chat" {...fade}>
-            <ChatScreen roleId={ROLE} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* reducedMotion="user" makes every framer-motion transition honour the
+          OS "reduce motion" setting (transforms collapse to instant/crossfade)
+          without per-component guards. CSS motion is tamed in index.css. */}
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence mode="wait">
+          {screen === 'login' && (
+            <motion.div key="login" {...fade}>
+              <LoginScreen />
+            </motion.div>
+          )}
+          {screen === 'chat' && (
+            <motion.div key="chat" {...fade}>
+              <ChatScreen roleId={ROLE} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </MotionConfig>
     </NavProvider>
   );
 }

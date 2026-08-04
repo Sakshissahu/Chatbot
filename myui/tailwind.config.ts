@@ -27,8 +27,11 @@ export default {
         danger: hsl('--danger'),
       },
       fontFamily: {
-        display: ['"Plus Jakarta Sans Variable"', '"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        sans: ['"Inter Variable"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Families resolve from CSS custom properties so the fontSans / fontDisplay
+        // knobs in src/lib/ui-config.ts flow through globally. Defaults + fallback
+        // stacks live in index.css (:root) and ui-config.ts.
+        display: ['var(--font-display)'],
+        sans: ['var(--font-sans)'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       borderRadius: {

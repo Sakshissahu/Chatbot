@@ -81,8 +81,8 @@ const titleFrom = (q: string) => {
   const t = q.trim().replace(/\s+/g, ' ');
   return t.length > 42 ? `${t.slice(0, 42)}…` : t;
 };
-const errMsg = (e: unknown) =>
-  e instanceof Error ? e.message : 'Something went wrong reaching the assistant. Please try again.';
+// Calm, classified copy for connection / server failures (see api.describeError).
+const errMsg = (e: unknown) => api.describeError(e);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();

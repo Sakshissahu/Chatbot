@@ -16,7 +16,8 @@ import {
 
   `sttLanguage` is the language the user will speak to the microphone — one
   language per session. The value is passed through to the recognizer as the
-  primary language. Default Gujarati.
+  primary language. Default English (en-IN), which the backend pairs with
+  Hindi/Gujarati as recognizer alternates.
 */
 
 const AUTOPLAY_KEY = 'ibg-voice-autoplay';
@@ -37,7 +38,7 @@ const STT_LANGUAGES: readonly SttLanguage[] = [
   'pa-IN',
   'ml-IN',
 ];
-const STT_LANG_DEFAULT: SttLanguage = 'gu-IN';
+const STT_LANG_DEFAULT: SttLanguage = 'en-IN';
 
 interface VoiceCtx {
   /** When true, a new assistant answer is read aloud once as it completes. */

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AlertTriangle, ArrowDown } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { SettingsModal } from '@/components/SettingsModal';
 import { AppMenu } from '@/components/AppMenu';
@@ -10,10 +10,14 @@ import { Composer } from '@/components/Composer';
 import { useChats } from '@/lib/chat-store';
 import { useNav } from '@/lib/nav';
 import { useAuth } from '@/lib/auth';
+import { useBackButton } from '@/lib/use-back-button';
 import { type RoleId } from '@/lib/roles';
 import logoUrl from '@/assets/ibg-logo.png';
 
 const ease = [0.22, 1, 0.36, 1] as const;
+
+/** Distance (px) from the bottom past which the scroll-to-bottom button appears. */
+const NEAR_BOTTOM_PX = 160;
 
 /** Product/bot name — shown in the phone top bar (and matches the sidebar header). */
 const BOT_NAME = 'IB Chicken Bot';
@@ -38,7 +42,10 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
   const [collapsed, setCollapsed] = useState(false); // desktop: full ↔ icon rail
   const [mobileOpen, setMobileOpen] = useState(false); // mobile overlay
   const [settingsOpen, setSettingsOpen] = useState(false); // centered settings modal
+  const [showJump, setShowJump] = useState(false); // scroll-to-bottom affordance
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null); // the messages scroll container
+  const reduce = useReducedMotion();
 
   const messages = activeChat?.messages ?? [];
   const empty = messages.length === 0;
@@ -51,9 +58,36 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
     return pool[Math.floor(Math.random() * pool.length)];
   }, [activeChat?.id, user?.name]);
 
+  const updateJump = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowJump(dist > NEAR_BOTTOM_PX);
+  }, []);
+
+  const scrollToBottom = useCallback(
+    (smooth = true) =>
+      endRef.current?.scrollIntoView({ behavior: smooth && !reduce ? 'smooth' : 'auto', block: 'end' }),
+    [reduce],
+  );
+
+  // New / changed messages keep the latest in view (smooth), as before.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages]);
+    scrollToBottom(true);
+  }, [messages, scrollToBottom]);
+
+  // Keyboard open/close (mobile) resizes the visible viewport without changing
+  // `messages`, so re-pin the latest message instantly so it stays above the
+  // keyboard instead of being clipped.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      if (messages.length > 0) scrollToBottom(false);
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, [messages.length, scrollToBottom]);
 
   const closeOnMobile = () => setMobileOpen(false);
 
@@ -70,8 +104,22 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
     [selectChat],
   );
 
+  // Device/browser Back, in order: close the settings modal → close the mobile
+  // sidebar → leave an active chat for the empty new-chat state → allow a normal
+  // exit. Pure view/nav state; never touches auth. (See useBackButton.)
+  const handleBack = useCallback(() => {
+    if (settingsOpen) {
+      setSettingsOpen(false);
+    } else if (mobileOpen) {
+      setMobileOpen(false);
+    } else if (!empty) {
+      newChat(roleId);
+    }
+  }, [settingsOpen, mobileOpen, empty, newChat, roleId]);
+  useBackButton(settingsOpen || mobileOpen || !empty, handleBack);
+
   return (
-    <div data-role={roleId} className="flex h-dvh flex-col overflow-hidden bg-bg">
+    <div data-role={roleId} className="flex h-app flex-col overflow-hidden bg-bg">
       {/* Phone top bar — compact & borderless: hamburger + the BOT name +
           app-level ⋯ menu. Rename now lives in the per-chat menu, not here.
           WEB has no top bar; its ⋯ floats at the top-right of the chat. */}
@@ -81,7 +129,7 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
           onClick={() => setMobileOpen((o) => !o)}
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileOpen}
-          className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
+          className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-[color,background-color,transform] hover:bg-surface-2 hover:text-ink active:scale-90"
         >
           <MenuIcon open={mobileOpen} />
         </button>
@@ -139,7 +187,7 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
                   target) is the height of the floating composer so the last
                   message always scrolls clear of it. Top padding keeps resting
                   content clear of the top fade. */}
-              <div className="flex-1 overflow-y-auto">
+              <div ref={scrollRef} onScroll={updateJump} className="flex-1 overflow-y-auto">
                 <div className="mx-auto w-full max-w-3xl px-4 pt-16 sm:px-6 lg:pt-20">
                   {connectionError && <ErrorBanner message={connectionError} />}
                   <div className="space-y-6">
@@ -160,7 +208,10 @@ export function ChatScreen({ roleId }: { roleId: RoleId }) {
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
                 <div className="h-16 bg-gradient-to-t from-bg to-bg/0" />
                 <div className="bg-bg pb-[max(1rem,env(safe-area-inset-bottom))]">
-                  <div className="pointer-events-auto mx-auto w-full max-w-3xl px-4 sm:px-6">
+                  <div className="pointer-events-auto relative mx-auto w-full max-w-3xl px-4 sm:px-6">
+                    {/* Scroll-to-bottom — floats just above the composer, only
+                        while scrolled away from the latest message. */}
+                    <ScrollToBottom show={showJump} onClick={() => scrollToBottom(true)} />
                     <Composer
                       busy={busy}
                       onSend={send}
@@ -200,15 +251,49 @@ function buildGreetings(firstName: string, hour: number): string[] {
   ];
 }
 
+/**
+ * Calm inline notice for connection / server problems. The message is already a
+ * friendly, classified sentence from api.describeError (offline / unreachable /
+ * timeout / a specific server message), so it's shown as-is.
+ */
 function ErrorBanner({ message }: { message: string }) {
   return (
     <div className="mb-5 flex items-start gap-2 rounded-2xl border border-danger/30 bg-danger/10 px-3.5 py-3 text-sm text-ink">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-      <span>
-        Couldn’t reach the assistant: {message}. Check that RAGFlow is running, then send your
-        message again.
-      </span>
+      <span>{message}</span>
     </div>
+  );
+}
+
+/**
+ * Scroll-to-bottom affordance — a small, theme-matching circular button that
+ * fades/scales in only when the user has scrolled away from the latest message,
+ * sitting just above the composer without obstructing content.
+ */
+function ScrollToBottom({ show, onClick }: { show: boolean; onClick: () => void }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.button
+          type="button"
+          onClick={onClick}
+          aria-label="Scroll to latest message"
+          initial={{ opacity: 0, y: 8, scale: 0.85 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.85 }}
+          transition={{ duration: 0.2, ease }}
+          // Positioned with non-transform CSS only: framer-motion drives `transform`
+          // (the y/scale entrance), so any Tailwind `translate-*` here would be
+          // overridden and the button would drop onto the composer. `bottom-full`
+          // pins it just above the composer (which grows upward), `mb-2.5` is the
+          // small gap, `left-0 right-0 mx-auto` centers it, and `z-10` keeps it
+          // above the composer's glass stacking context.
+          className="focus-ring glass absolute bottom-full left-0 right-0 z-10 mx-auto mb-2.5 flex h-9 w-9 items-center justify-center rounded-full border border-border text-ink-soft shadow-lift transition-colors hover:text-ink"
+        >
+          <ArrowDown className="h-[18px] w-[18px]" strokeWidth={2} />
+        </motion.button>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -245,9 +330,12 @@ function HomeView({
       <HomeGlow />
 
       {/* Greeting (+ the desktop composer) — vertically centered as a group,
-          with the IB Group mark sitting just above it (home/empty state only). */}
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10">
-        <div className="flex w-full max-w-2xl flex-col items-center">
+          with the IB Group mark sitting just above it (home/empty state only).
+          `overflow-y-auto` + `my-auto` keep it centered when there's room but let
+          it scroll instead of clipping when the mobile keyboard squeezes the
+          visible viewport. */}
+      <div className="relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-4 py-6 sm:py-10">
+        <div className="my-auto flex w-full max-w-2xl flex-col items-center">
           <motion.img
             src={logoUrl}
             alt="IB Group"

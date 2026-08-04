@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -9,24 +9,25 @@ import {
   Settings,
   SquarePen,
   Trash2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { EASE, dur, panelSpring, contentFade } from '@/lib/motion';
 import { Logo } from '@/components/Logo';
+import { Tooltip } from '@/components/Tooltip';
 import { ROLES, type RoleId } from '@/lib/roles';
 import type { Chat } from '@/lib/chat-store';
 
-const ease = [0.22, 1, 0.36, 1] as const;
+const ease = EASE;
 const RAIL_W = 68; // px — thin icon rail
 const FULL_W = 280; // px — full labelled sidebar
 
-// Shared motion. One critically-damped spring drives the panel geometry (the
-// desktop rail↔full width and the mobile overlay slide) so both share the same
-// premium cadence; it's tuned to settle with no overshoot, so the width never
-// flashes past its target. A short tween cross-fades the rail/full contents.
-const panelSpring = { type: 'spring', stiffness: 420, damping: 44, mass: 1 } as const;
-const contentFade = { duration: 0.16, ease } as const;
-const overlayFade = { duration: 0.2, ease } as const;
+// Shared motion lives in lib/motion.ts so the motionScale knob applies. The
+// panel spring drives the desktop rail↔full width (settles with no overshoot);
+// the mobile drawer uses a clean ease-out slide; a short tween cross-fades the
+// rail/full contents.
+const drawerSlide = { duration: dur(0.32), ease } as const;
 
 interface SidebarProps {
   /** Desktop only: render the thin icon rail instead of the full sidebar. */
@@ -99,18 +100,20 @@ export function Sidebar(props: SidebarProps) {
         </AnimatePresence>
       </motion.nav>
 
-      {/* Mobile: drawer that slides in BELOW the persistent top bar (top-12),
-          so the bar's hamburger stays visible and morphs to an X to close. */}
+      {/* Mobile: drawer that slides in from the left BELOW the persistent top
+          bar (top-12), so the bar's hamburger stays visible and morphs to an X
+          to close. A full left→right slide (and back) gives a clear open/close
+          transition; reduced motion collapses it to instant via MotionConfig. */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.nav
             key="mobile"
             aria-label="Chat history"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ x: panelSpring, opacity: overlayFade }}
-            className="fixed inset-x-0 bottom-0 top-12 z-40 flex flex-col bg-bg lg:hidden"
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={drawerSlide}
+            className="fixed inset-x-0 bottom-0 top-12 z-40 flex flex-col bg-bg shadow-lift lg:hidden"
           >
             <SidebarFull {...props} variant="mobile" />
           </motion.nav>
@@ -136,6 +139,19 @@ function SidebarFull({
 }: SidebarProps & { variant: 'desktop' | 'mobile' }) {
   const role = ROLES[roleId];
   const initial = userName.trim().charAt(0).toUpperCase() || '·';
+
+  // Client-side chat search — filters the already-loaded conversations by title
+  // (and any loaded message text) as the user types. No backend call.
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!q) return chats;
+    return chats.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        c.messages.some((m) => m.content.toLowerCase().includes(q)),
+    );
+  }, [chats, q]);
 
   return (
     <div className="flex h-full flex-col" style={{ width: variant === 'desktop' ? FULL_W : '100%' }}>
@@ -163,39 +179,63 @@ function SidebarFull({
       )}
 
       {/* New chat + search */}
-      <div className={cn('space-y-1 px-3 pb-2', variant === 'mobile' && 'pt-3')}>
+      <div className={cn('space-y-1.5 px-3 pb-2', variant === 'mobile' && 'pt-3')}>
         <button
           type="button"
           onClick={onNewChat}
-          className="focus-ring flex w-full items-center gap-2.5 rounded-2xl border border-border bg-surface-2/60 px-3.5 py-2.5 font-display text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+          className="group focus-ring flex w-full items-center gap-2.5 rounded-2xl border border-border bg-surface-2/60 px-3.5 py-2.5 font-display text-sm font-semibold text-ink transition-colors hover:bg-surface-2 active:scale-[0.99]"
         >
-          <SquarePen className="h-[18px] w-[18px] text-ink-soft" strokeWidth={2} />
+          <SquarePen
+            className="h-[18px] w-[18px] text-ink-soft transition-transform duration-300 ease-spring group-hover:-rotate-6 group-hover:scale-110"
+            strokeWidth={2}
+          />
           New chat
         </button>
-        {/* Styled placeholder — chat search is not wired to the backend yet.
-            TODO: hook up once the backend exposes conversation search. */}
-        <div
-          role="presentation"
-          title="Search isn’t available yet"
-          className="flex w-full cursor-default items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-sm text-ink-faint"
-        >
-          <Search className="h-[18px] w-[18px]" strokeWidth={2} />
-          <span className="flex-1 text-left">Search chats</span>
+        {/* Client-side search over loaded conversations. */}
+        <div className="flex w-full items-center gap-2.5 rounded-2xl border border-border bg-surface-2/40 px-3.5 py-2.5 text-sm transition-colors focus-within:border-primary/45">
+          <Search className="h-[18px] w-[18px] shrink-0 text-ink-faint" strokeWidth={2} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+            className="min-w-0 flex-1 bg-transparent text-ink placeholder:text-ink-faint focus:outline-none"
+          />
+          <AnimatePresence initial={false}>
+            {query && (
+              <motion.button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.6 }}
+                transition={{ duration: dur(0.15), ease }}
+                className="focus-ring shrink-0 rounded-md p-0.5 text-ink-faint transition-colors hover:text-ink"
+              >
+                <X className="h-4 w-4" />
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
       {/* History */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         <p className="px-2 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-ink-faint">
-          Recent chats
+          {q ? 'Results' : 'Recent chats'}
         </p>
         {chats.length === 0 ? (
           <p className="px-2 py-2 text-sm leading-relaxed text-ink-faint">
             No conversations yet. Start one above.
           </p>
+        ) : filtered.length === 0 ? (
+          <p className="px-2 py-2 text-sm leading-relaxed text-ink-faint">
+            No chats match “{query.trim()}”.
+          </p>
         ) : (
           <ul className="space-y-0.5">
-            {chats.map((c) => (
+            {filtered.map((c) => (
               <ChatRow
                 key={c.id}
                 chat={c}
@@ -517,15 +557,16 @@ function SidebarRail({ userName, onToggleCollapse, onNewChat }: SidebarProps) {
     <div className="flex h-full flex-col items-center justify-between py-4" style={{ width: RAIL_W }}>
       <div className="flex flex-col items-center gap-1.5">
         {/* Brand doubles as the expand control. */}
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          aria-label="Expand sidebar"
-          title="Expand sidebar"
-          className="focus-ring mb-2 flex items-center justify-center rounded-xl transition-transform hover:scale-105"
-        >
-          <Logo showWord={false} />
-        </button>
+        <Tooltip label="Expand sidebar" side="right">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label="Expand sidebar"
+            className="focus-ring mb-2 flex items-center justify-center rounded-xl transition-transform duration-300 ease-spring hover:scale-105"
+          >
+            <Logo showWord={false} />
+          </button>
+        </Tooltip>
         <RailButton icon={SquarePen} label="New chat" onClick={onNewChat} />
         <RailButton icon={Search} label="Search chats" onClick={onToggleCollapse} />
       </div>
@@ -533,15 +574,16 @@ function SidebarRail({ userName, onToggleCollapse, onNewChat }: SidebarProps) {
       {/* Settings is intentionally absent from the rail — it lives in the
           expanded sidebar footer (open the rail first). */}
       <div className="flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          aria-label="Account — expand sidebar"
-          title={userName}
-          className="focus-ring flex h-9 w-9 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand ring-1 ring-brand/25 transition-transform hover:scale-105"
-        >
-          {initial}
-        </button>
+        <Tooltip label={userName || 'Account'} side="right">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label="Account — expand sidebar"
+            className="focus-ring flex h-9 w-9 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand ring-1 ring-brand/25 transition-transform duration-300 ease-spring hover:scale-105"
+          >
+            {initial}
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -557,14 +599,18 @@ function RailButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="focus-ring flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
-    >
-      <Icon className="h-[22px] w-[22px]" strokeWidth={2} />
-    </button>
+    <Tooltip label={label} side="right">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className="group focus-ring flex h-10 w-10 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink"
+      >
+        <Icon
+          className="h-[22px] w-[22px] transition-transform duration-300 ease-spring group-hover:scale-110"
+          strokeWidth={2}
+        />
+      </button>
+    </Tooltip>
   );
 }

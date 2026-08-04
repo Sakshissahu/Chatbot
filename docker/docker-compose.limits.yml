@@ -1,0 +1,48 @@
+# ============================================================================
+#  Memory limits + Elasticsearch heap cap + log rotation for the RAGFlow stack.
+#
+#  WHY: the server crashed from a global out-of-memory. RAGFlow's Elasticsearch
+#  had no heap cap and auto-sized to ~31 GB, and no container had a memory ceiling
+#  — so on a shared server the stack could exhaust all RAM. These caps prevent
+#  that: each container gets a GENEROUS ceiling (well above normal use), so
+#  latency / accuracy / throughput are unaffected — the limits only stop a runaway.
+#
+#  Auto-loaded via the `include:` in docker-compose.yml, so it applies on the
+#  laptop AND the server with no extra flags. Committed (safe to deploy).
+#
+#  Tuning note: values suit a shared box. The sum of ceilings (~40 GB) leaves
+#  plenty of the server's 122 GB for the other projects + OS. Raise ES heap only
+#  if the index grows to tens of GB (it's tiny today, so 4 GB is ample).
+# ============================================================================
+services:
+  es01:
+    environment:
+      # Cap the JVM heap (was auto ~31 GB). The index is small, so 4 GB is plenty
+      # for full search speed & identical results — no accuracy/latency impact.
+      - ES_JAVA_OPTS=-Xms4g -Xmx4g
+    mem_limit: 8g
+    logging: &deflog
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ragflow-cpu:
+    mem_limit: 16g
+    logging: *deflog
+
+  tei-cpu:
+    mem_limit: 6g
+    logging: *deflog
+
+  mysql:
+    mem_limit: 4g
+    logging: *deflog
+
+  minio:
+    mem_limit: 4g
+    logging: *deflog
+
+  redis:
+    mem_limit: 2g
+    logging: *deflog

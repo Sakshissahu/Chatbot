@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Check, Eye, EyeOff, Lock, User } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { describeError } from '@/lib/api';
 import { useNav } from '@/lib/nav';
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -26,7 +27,9 @@ export function LoginScreen() {
     try {
       await authenticate(name.trim(), password, remember);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
+      // describeError keeps a real 401 ("Incorrect password") specific while
+      // turning network/timeout failures into calm, useful guidance.
+      setError(describeError(err));
     } finally {
       setBusy(false);
     }
@@ -39,23 +42,26 @@ export function LoginScreen() {
     'flex items-center gap-2.5 rounded-2xl border bg-bg-2/60 px-3.5 transition-colors focus-within:border-primary/45';
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-bg">
+    <div className="relative flex h-app flex-col overflow-hidden bg-bg">
       <LoginGlow />
 
       {/* Floating header — matches the chat home's borderless controls: brand
           lockup top-left, theme toggle top-right (Settings isn't reachable
           pre-login, so the toggle stays here by design). */}
-      <header className="relative z-10 flex items-center justify-between px-4 py-4 sm:px-6">
+      <header className="relative z-10 flex shrink-0 items-center justify-between px-4 py-4 sm:px-6">
         <Logo />
         <ThemeToggle />
       </header>
 
-      <main className="relative z-10 flex flex-1 items-center justify-center px-5 pb-12 pt-2 sm:pb-16">
+      {/* `overflow-y-auto` + `my-auto` on the card centre it when there's room
+          but let it scroll instead of clipping when the mobile keyboard shrinks
+          the visible viewport (which `h-app` tracks). */}
+      <main className="relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-5 pb-12 pt-2 sm:pb-16">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease }}
-          className="w-full max-w-md"
+          className="my-auto w-full max-w-md"
         >
           <div className="rounded-3xl border border-border bg-surface p-7 shadow-soft sm:p-8">
             <div className="mb-7">
@@ -158,10 +164,6 @@ export function LoginScreen() {
               </button>
             </form>
           </div>
-
-          <p className="mt-5 px-2 text-center text-xs leading-relaxed text-ink-faint">
-            Demo sign-in — any details work. Your username personalises the chat.
-          </p>
         </motion.div>
       </main>
     </div>

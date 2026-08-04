@@ -96,7 +96,7 @@ export function AppMenu({ className }: { className?: string }) {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          'focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink',
+          'focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-soft transition-[color,background-color,transform] hover:bg-surface-2 hover:text-ink active:scale-90',
           open && 'bg-surface-2 text-ink',
           className,
         )}

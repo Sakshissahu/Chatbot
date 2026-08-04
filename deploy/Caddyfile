@@ -1,0 +1,50 @@
+# ============================================================================
+#  IB Group Chat — reverse proxy (Caddy)
+#  Two domains, HTTPS obtained + renewed automatically by Caddy.
+#
+#    chickenbot.abisexport.com   -> the chat UI (users)
+#                                     /        = frontend static build
+#                                     /bff/*   = backend (BFF) on :7071
+#    botadmin.auditupload.com    -> the RAGFlow admin dashboard (you) on :7072
+#
+#  The old auditupload.abisexport.com (a separate backend domain) is GONE:
+#  the backend now lives under the SAME domain as the frontend at /bff, so the
+#  browser makes same-origin calls (no CORS).
+#
+#  ── EDIT THE 2 LINES MARKED  <<< EDIT  BEFORE DEPLOYING ──────────────────────
+# ============================================================================
+
+{
+	# Email Let's Encrypt uses for cert notices. Real address recommended.
+	email admin@ibgroup.co.in            # <<< EDIT (or leave; any valid email)
+}
+
+# ── USERS: chat UI + its backend, one origin ───────────────────────────────
+chickenbot.abisexport.com {
+	encode gzip
+
+	# Backend (BFF). MUST come before the static handler so /bff wins.
+	# flush_interval -1 = do NOT buffer -> the answer streams word-by-word (SSE).
+	handle /bff/* {
+		reverse_proxy localhost:7071 {
+			flush_interval -1
+		}
+	}
+
+	# Frontend: the built static site (Vite `dist`). try_files gives SPA routing.
+	handle {
+		root * /opt/IB_Chatbot_Server/myui/dist   # <<< EDIT to where myui/dist lives on the server
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# ── ADMIN: RAGFlow dashboard ────────────────────────────────────────────────
+# NOTE: this exposes RAGFlow (dashboard AND its API) to the internet. Security
+# hardening (IP allow-list / basic auth / VPN) is planned as a later step — add
+# it inside this block when ready. flush_interval -1 keeps RAGFlow's streams live.
+botadmin.auditupload.com {
+	reverse_proxy localhost:7072 {
+		flush_interval -1
+	}
+}

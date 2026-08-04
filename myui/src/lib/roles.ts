@@ -1,6 +1,6 @@
-import { Sprout, Briefcase, type LucideIcon } from 'lucide-react';
+import { Sprout, type LucideIcon } from 'lucide-react';
 
-export type RoleId = 'farmer' | 'employee';
+export type RoleId = 'farmer';
 
 export interface RoleConfig {
   id: RoleId;
@@ -15,7 +15,7 @@ export interface RoleConfig {
 }
 
 // Bot routing now lives backend-side (role -> bot id), so the frontend no
-// longer needs RAGFlow chat ids here.
+// longer needs RAGFlow chat ids here. This app is Farmer-only.
 export const ROLES: Record<RoleId, RoleConfig> = {
   farmer: {
     id: 'farmer',
@@ -30,19 +30,6 @@ export const ROLES: Record<RoleId, RoleConfig> = {
       'What are the early warning signs of disease in a flock?',
     ],
   },
-  employee: {
-    id: 'employee',
-    label: 'Employee',
-    icon: Briefcase,
-    tagline: 'People & policy desk',
-    blurb: 'Leave, benefits, conduct and workplace policy — answered straight from the IB Group HR handbook.',
-    corpus: 'HR policy handbook',
-    suggestions: [
-      'How many earned leave days do I get per year?',
-      'What is the policy on working hours and attendance?',
-      'How do I claim reimbursement for expenses?',
-    ],
-  },
 };
 
-export const ROLE_LIST: RoleConfig[] = [ROLES.farmer, ROLES.employee];
+export const ROLE_LIST: RoleConfig[] = [ROLES.farmer];

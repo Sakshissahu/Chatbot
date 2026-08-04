@@ -1,21 +1,20 @@
 ================================================================
-  IB GROUP CHATBOT — FULL STARTUP GUIDE (from a cold laptop)
+  IB GROUP CHATBOT — LOCAL STARTUP GUIDE (from a cold laptop)
 ================================================================
   Follow these in ORDER. Each part must be running before the next.
   Keep every terminal/window OPEN — closing one stops that service.
-  Laptop must stay PLUGGED IN and AWAKE while people use the demo.
 ================================================================
 
 
 ----------------------------------------------------------------
- THE 4 THINGS THAT MUST RUN (in this order)
+ THE 3 THINGS THAT MUST RUN (in this order)
 ----------------------------------------------------------------
-   1. RAGFlow        (Docker)            — the AI engine + bots
-   2. App Postgres   (Docker)            — logging + chat history
-   3. Backend        (Node, terminal)    — the middle layer
-   4. Tunnel + Deploy (start-demo.ps1)   — makes it public
+   1. Docker stack   (Docker)            — RAGFlow (AI engine + bots)
+                                           AND the app Postgres, all in ONE stack
+   2. Backend        (Node, terminal)    — the middle layer (BFF)
+   3. Frontend       (Node, terminal)    — the web UI
 
-   (The frontend is on Vercel already — you don't start it locally.)
+  (The app's Postgres is now part of the Docker stack — no separate step.)
 
 
 ================================================================
@@ -23,185 +22,104 @@
 ================================================================
   Open Docker Desktop from the Start menu. Wait until the whale
   icon says it's running. Nothing below works until Docker is up.
-================================================================
- STEP 1 — Start RAGFlow (the AI engine)
-================================================================
-
-     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\docker
-     docker compose -f docker-compose.yml up -d
 
 ================================================================
- STEP 2 — Start the app's Postgres (logging/history DB)
+ STEP 1 — Start the whole Docker stack (ONE command)
 ================================================================
 
-     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\myui-backend
+     cd docker
      docker compose up -d
 
+  This starts EVERYTHING in one project named "ib_chatbot":
+     ib_chatbot-ragflow-cpu-1   (the AI engine, on http://localhost:7072)
+     ib_chatbot-mysql-1, -es01-1, -minio-1, -redis-1, -tei-cpu-1
+     ibchat_postgres            (the app's logging/history DB, port 5442)
+
+  Wait 1–2 minutes for RAGFlow to fully boot (http://localhost:7072
+  should load the login page).
+
 ================================================================
- STEP 3 — Start the Backend (the middle layer)
+ STEP 2 — Start the Backend (the middle layer / BFF)
 ================================================================
-run this 
-    cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\myui-backend
-     npm run dev
-then this
-    cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\myui
-     npm run dev
+
+     cd myui-backend
+     npm run dev          (keep open — http://localhost:7071)
+
 ================================================================
- STEP 4 — Go live (tunnel + deploy in one command)
+ STEP 3 — Start the Frontend (the web UI)
 ================================================================
-  Open a NEW terminal and run:
 
-     cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow
-     .\start-demo.ps1
+     cd myui
+     npm run dev          (keep open — http://localhost:5173)
 
-  This will:
-    - open a fresh Cloudflare tunnel to the backend
-    - point Vercel at the new tunnel URL
-    - redeploy the frontend
-    - print the PUBLIC LINK to share
-
-  The link to share is the ALIAS:
-     https://ib-chatbot-six.vercel.app
-
-  (If the script prints a long "...-xxxxx-...vercel.app" URL that
-   shows a login wall, ignore it — share the alias above instead.)
-
-  Leave the tunnel terminal OPEN. Closing it kills the public link.
+  Open http://localhost:5173 in the browser to use the app.
 
 
 ================================================================
- STEP 5 — TEST before sharing
+ STEP 4 — TEST
 ================================================================
-  On your PHONE (not the laptop — test like a teammate would):
-    1. Open  https://ib-chatbot-six.vercel.app
-    2. Log in (any name/password)
-    3. Pick Farmer → ask "What biosecurity measures for poultry sheds?"
+    1. Open  http://localhost:5173
+    2. Log in (any username; password is the demo password from
+       myui-backend/.env -> DEMO_PASSWORD)
+    3. Ask the Farmer bot: "What biosecurity measures for poultry sheds?"
        → should stream an answer with citations
-    4. Pick Employee → ask the same → should refuse (HR-only)
-
-  If that works on your phone, it works for everyone. Share the link.
-
-
-================================================================
- IMPORTANT RULES WHILE THE DEMO IS LIVE
-================================================================
-  - Laptop PLUGGED IN and AWAKE (don't close the lid / let it sleep).
-  - Keep ALL terminals open: backend (Step 3) + tunnel (Step 4).
-  - The tunnel URL CHANGES every time you re-run start-demo.ps1 —
-    that's fine, the script updates Vercel automatically. Always
-    share the SAME alias link (ib-chatbot-six.vercel.app); it stays
-    constant even when the tunnel behind it changes.
 
 
 ================================================================
  SHUTTING DOWN (end of day)
 ================================================================
-  - Close the tunnel terminal (or run: .\stop-demo.ps1 from ragflow)
-  - Stop the backend: Ctrl+C in its terminal
-  - Stop Docker services (keeps all data):
-       cd C:\Users\prajjwal.kushwaha\Documents\CODE\BDchatbot\ragflow\docker
-       docker compose -f docker-compose.yml stop
-       cd ..\myui-backend
+  - Stop the frontend: Ctrl+C in its terminal
+  - Stop the backend:  Ctrl+C in its terminal
+  - Stop the Docker stack (keeps all data):
+       cd docker
        docker compose stop
 
-  ⚠️ NEVER run "docker compose down -v" — the -v DELETES all data
+  !! NEVER run "docker compose down -v" — the -v DELETES all data
      (docs, chats, logins). Always use "stop".
 
 
 ================================================================
- QUICK REFERENCE (once you know the flow)
-================================================================
-  1. Docker Desktop on
-  2. ragflow\docker         → docker compose -f docker-compose.yml up -d   (wait 2 min)
-  3. ragflow\myui-backend   → docker compose up -d
-  4. ragflow\myui-backend   → npm run dev          (keep open)
-  5. ragflow                → .\start-demo.ps1      (keep open)
-  6. Share: https://ib-chatbot-six.vercel.app
-================================================================
-
-
-================================================================
- MANAGING BOTS  (admin work — done in RAGFlow at http://localhost)
+ MANAGING BOTS  (admin work — done in RAGFlow at http://localhost:7072)
 ================================================================
 
   KEY IDEA:
    - A bot's SETTINGS (model, prompt, temperature, which datasets) live
      in RAGFlow's admin UI, per bot. Change anytime — NO code needed.
-   - The PUBLIC APP just routes a role -> a bot's ID. Adding/removing a
-     bot from the public app needs a small frontend change (role + ID).
+   - The public app just routes a role -> a bot's ID.
 
-  Current bots (their IDs, for reference):
-     Farmer   ("IB-assist")          = 66824bb2675f11f1bb5ca9173f52da2e  -> "farmer docs"
-     Employee ("Employee Assistant") = 2150f758676111f1bb5ca9173f52da2e  -> "HR policy"
+  Current bot in use (Farmer only):
+     Farmer ("IB-assist") = 66824bb2675f11f1bb5ca9173f52da2e  -> "farmer docs"
 
 
   ----------------------------------------------------------------
-   A) CHANGE AN EXISTING BOT'S SETTINGS  (e.g. switch model)
+   CHANGE THE BOT'S SETTINGS  (e.g. switch model)
   ----------------------------------------------------------------
    100% in RAGFlow admin UI — no code, no redeploy.
 
-   1. http://localhost  -> log in (admin@ibgroup.co.in)
+   1. http://localhost:7072  -> log in (admin@ibgroup.co.in)
    2. Click "Chat" in the top nav
-   3. Open the bot (e.g. IB-assist) -> its settings
+   3. Open the bot (IB-assist) -> its settings
    4. Change what you want:
-        - Model Setting tab  -> pick a different model (e.g.
-          llama-3.1-8b-instant for lighter/cheaper), temperature, etc.
+        - Model Setting tab  -> pick a different model, temperature, etc.
         - Prompt Engine tab  -> system prompt, similarity threshold,
           Top N, empty-response (the "refuse" message), etc.
         - Assistant Setting tab -> datasets linked, greeting, citations
-   5. Save.  The public app uses the new settings immediately —
-      nothing to redeploy (it just talks to the same bot ID).
+   5. Save.  The public app uses the new settings immediately.
 
    NOTE: saving Model Setting may flash the "model_type" error once —
    the MySQL trigger strips it; just start a fresh chat. If it sticks,
-   run:  docker restart docker-ragflow-cpu-1  (wait 1 min).
-
-
-  ----------------------------------------------------------------
-   B) ADD A BRAND-NEW BOT  (e.g. a 3rd role like "Manager")
-  ----------------------------------------------------------------
-   Two parts: make the bot in RAGFlow (admin), then add it to the
-   public app (small frontend change via Claude Code).
-
-   PART 1 — In RAGFlow admin (http://localhost):
-     1. Dataset tab -> Create dataset -> name it (e.g. "Manager docs")
-          * IMPORTANT: set its embedding model to the SAME one the
-            others use: BAAI/bge-small-en-v1.5
-     2. Upload that bot's documents -> select them -> Parse -> wait green
-     3. Chat tab -> Create Assistant -> name it (e.g. "Manager Assistant")
-          * Datasets: select ONLY that new dataset (keeps it isolated —
-            it won't answer other roles' questions)
-          * Empty response: e.g. "I can only help with manager topics."
-          * Model: same Groq model (or whatever you want)
-          * System prompt: its persona (can include {user_name})
-     4. Save and test it in the UI.
-     5. Get its BOT ID (dialog_id) — from the URL when the assistant is
-        open, or ask Claude Code to read it from the DB.
-
-   PART 2 — Add it to the public app (frontend — Claude Code task):
-     Give Claude Code a prompt like:
-       "In ragflow/myui, add a new role 'Manager' to the role-select
-        screen, mapped to bot/dialog_id <THE_NEW_ID>. Follow the exact
-        pattern already used for Farmer and Employee (role -> bot_id
-        routing in the backend + a role card in the frontend). Keep the
-        existing design/identity. Don't touch the other bots."
-     Then redeploy:  .\start-demo.ps1
-
-   Result: new role appears on the login/role screen, routes to the new
-   bot, stays isolated to its own dataset.
+   run:  docker restart ib_chatbot-ragflow-cpu-1  (wait 1 min).
 
 
 ================================================================
  IF SOMETHING'S BROKEN
 ================================================================
-  - Link loads but chat fails / "Request failed" →
-      backend (Step 3) or tunnel (Step 4) isn't running. Restart them.
-  - 502 / "network anomaly" at http://localhost →
+  - App loads but chat fails / "Request failed" ->
+      backend (Step 2) isn't running. Restart it.
+  - 502 / "network anomaly" at http://localhost:7072 ->
       RAGFlow still booting; wait 1–2 min, refresh.
-  - model_type error in a chat →
+  - model_type error in a chat ->
       start a fresh chat (the DB trigger handles it). If it persists,
-      restart: docker restart docker-ragflow-cpu-1 (wait 1 min).
-  - Tunnel won't start →
-      re-run .\start-demo.ps1; check backend is up on :8088 first.
+      restart: docker restart ib_chatbot-ragflow-cpu-1 (wait 1 min).
   - Check everything running:  docker ps
 ================================================================

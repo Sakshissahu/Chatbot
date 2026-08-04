@@ -18,9 +18,8 @@ import type { RoleId } from '@/lib/roles';
 //  • Local dev: VITE_BACKEND_URL is unset, so BASE is the relative `/bff`
 //    prefix and the Vite dev proxy forwards it to http://localhost:8088
 //    (same-origin in the browser — no CORS).
-//  • Vercel build: VITE_BACKEND_URL is set to the Cloudflare tunnel URL
-//    (e.g. https://something.trycloudflare.com), so BASE becomes an absolute
-//    cross-origin URL like https://something.trycloudflare.com/bff. Vite
+//  • Deployed build: VITE_BACKEND_URL is set to the backend's public URL, so
+//    BASE becomes an absolute cross-origin URL like https://host/bff. Vite
 //    inlines this at build time, so it must be set before `vite build`.
 //
 // VITE_BFF_BASE still overrides just the path prefix if ever needed.
@@ -74,13 +73,118 @@ export interface AskUpdate {
   reference?: Reference;
 }
 
-export class ApiError extends Error {}
+/**
+ * How a request failed. Centralising this lets every caller (login AND chat)
+ * tell apart a network-level throw from an HTTP error response, and a genuine
+ * 401 from "the server is down", so the UI can show the right calm message:
+ *   • offline     — device has no connection (navigator.onLine === false)
+ *   • unreachable — fetch() threw but we're online (backend down / DNS / CORS)
+ *   • timeout     — the request exceeded REQUEST_TIMEOUT_MS
+ *   • server      — an HTTP error response (5xx, or a 4xx that isn't auth)
+ *   • auth        — 401/403; the credential/session message is kept verbatim
+ *   • aborted     — cancelled via an AbortSignal (user stop); never surfaced
+ *   • unknown     — anything else (in-band stream error, parse failure)
+ */
+export type ApiErrorKind =
+  | 'offline'
+  | 'unreachable'
+  | 'timeout'
+  | 'server'
+  | 'auth'
+  | 'aborted'
+  | 'unknown';
+
+export class ApiError extends Error {
+  kind: ApiErrorKind;
+  status?: number;
+  constructor(message: string, kind: ApiErrorKind = 'unknown', status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.kind = kind;
+    this.status = status;
+  }
+}
 
 /** Thrown when the backend has no Google Speech key — voice is disabled. */
 export class VoiceNotConfiguredError extends ApiError {
   constructor() {
     super('voice_not_configured');
   }
+}
+
+/** Abort short JSON requests that hang, so a dead backend reads as a timeout. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+function timeoutSignal(): AbortSignal | undefined {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  }
+  return undefined;
+}
+
+/**
+ * Classify a rejected fetch() — i.e. NO HTTP response arrived. This is always a
+ * network-level failure (or an abort), never a status code.
+ */
+function fromFetchThrow(e: unknown): ApiError {
+  if (e instanceof DOMException && e.name === 'AbortError') {
+    return new ApiError('The request was cancelled.', 'aborted');
+  }
+  // AbortSignal.timeout(...) rejects with a TimeoutError.
+  if (e instanceof DOMException && e.name === 'TimeoutError') {
+    return new ApiError('The request timed out.', 'timeout');
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return new ApiError('You appear to be offline.', 'offline');
+  }
+  return new ApiError('Could not reach the server.', 'unreachable');
+}
+
+/**
+ * Build a classified error from an HTTP error RESPONSE. A server-provided
+ * `{ error }` message is kept verbatim (so a real 401 stays "Incorrect
+ * password"); otherwise a calm status-appropriate default is used.
+ */
+async function fromHttpResponse(res: Response): Promise<ApiError> {
+  let provided: string | null = null;
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    if (body?.error) provided = String(body.error);
+  } catch {
+    /* non-JSON error body */
+  }
+  const status = res.status;
+  if (status === 401 || status === 403) {
+    return new ApiError(provided ?? 'Your session has expired — please sign in again.', 'auth', status);
+  }
+  if (status >= 500) {
+    return new ApiError(provided ?? 'The server ran into a problem — please try again.', 'server', status);
+  }
+  return new ApiError(provided ?? `Request failed (${status}).`, 'server', status);
+}
+
+/**
+ * Map any error to a short, calm, user-facing sentence. Network/timeout cases
+ * get friendly guidance; auth/server cases keep their specific message (so a
+ * wrong password is never relabelled as a connection problem).
+ */
+export function describeError(e: unknown): string {
+  if (e instanceof ApiError) {
+    switch (e.kind) {
+      case 'offline':
+        return 'You appear to be offline — check your connection.';
+      case 'unreachable':
+        return 'Can’t reach the server right now — please try again.';
+      case 'timeout':
+        return 'That took too long to respond — please try again.';
+      case 'auth':
+      case 'server':
+        return e.message;
+      default:
+        return e.message;
+    }
+  }
+  return e instanceof Error ? e.message : 'Something went wrong. Please try again.';
 }
 
 // --- session persistence (set on login, cleared on logout) ---
@@ -153,20 +257,11 @@ function headers(extra: Record<string, string> = {}): HeadersInit {
 async function jsonFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, init);
-  } catch {
-    throw new ApiError('Could not reach the server. Is the backend running?');
+    res = await fetch(`${BASE}${path}`, { ...init, signal: init.signal ?? timeoutSignal() });
+  } catch (e) {
+    throw fromFetchThrow(e);
   }
-  if (!res.ok) {
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const body = await res.json();
-      if (body?.error) msg = body.error;
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new ApiError(msg);
-  }
+  if (!res.ok) throw await fromHttpResponse(res);
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
@@ -236,19 +331,10 @@ export async function sendMessage(
       body: JSON.stringify({ question }),
       signal,
     });
-  } catch {
-    throw new ApiError('Could not reach the server. Is the backend running?');
+  } catch (e) {
+    throw fromFetchThrow(e);
   }
-  if (!res.ok) {
-    let msg = `The assistant ran into an error (${res.status}).`;
-    try {
-      const body = await res.json();
-      if (body?.error) msg = body.error;
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(msg);
-  }
+  if (!res.ok) throw await fromHttpResponse(res);
   if (!res.body) throw new ApiError('No response stream from the server.');
 
   const reader = res.body.getReader();

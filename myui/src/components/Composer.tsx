@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUp, Info, Loader2, Mic, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, Info, Loader2, Mic, Square, X } from 'lucide-react';
 import { transcribeAudio, VoiceNotConfiguredError } from '@/lib/api';
 import { UnsupportedRecordingError, VoiceRecorder, type Recording } from '@/lib/recorder';
 import { useVoicePrefs } from '@/lib/voice';
@@ -15,10 +15,9 @@ const MAX_RECORDING_MS = 60_000;
  * textarea, Enter-to-send (Shift+Enter for newline), a Stop button while
  * streaming, and `onSend(text)` on submit.
  *
- * The mic is wired to speech-to-text: tap to record, tap again to transcribe
- * into the input for review (we never auto-send — the send/stream path above is
- * untouched). The "+" attach button stays UI-only: the BFF chat endpoint takes
- * text, so a chosen file just surfaces its name as a chip; nothing is uploaded.
+ * The mic is push-to-talk: press and HOLD the mic to record, RELEASE to stop and
+ * transcribe into the input for review (we never auto-send — the send/stream path
+ * above is untouched).
  */
 export function Composer({
   busy,
@@ -33,13 +32,15 @@ export function Composer({
 }) {
   const { sttLanguage } = useVoicePrefs();
   const [value, setValue] = useState('');
-  const [attachment, setAttachment] = useState<string | null>(null);
   const [recState, setRecState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<VoiceRecorder | null>(null);
   const autoStopRef = useRef<number | null>(null);
+  // True while the mic button is physically held down (push-to-talk). Used to
+  // handle the case where the button is released before the async mic start
+  // finishes — we then stop immediately instead of getting stuck "recording".
+  const heldRef = useRef(false);
 
   // auto-grow
   useEffect(() => {
@@ -56,15 +57,6 @@ export function Composer({
     if (!t || busy) return;
     onSend(t);
     setValue('');
-    setAttachment(null); // attachment is decorative only; not sent
-  };
-
-  // TODO: file upload is not wired — the backend chat endpoint takes text only.
-  // We only show the chosen filename so the affordance is real and testable.
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) setAttachment(f.name);
-    e.target.value = ''; // allow re-picking the same file
   };
 
   // --- voice input (speech-to-text) ---
@@ -128,6 +120,20 @@ export function Composer({
     recorderRef.current = recorder;
     setRecState('recording');
     autoStopRef.current = window.setTimeout(() => void stopRecording(), MAX_RECORDING_MS);
+    // If the button was already released while the mic was starting up, stop now.
+    if (!heldRef.current) void stopRecording();
+  };
+
+  // Push-to-talk: begin on press, end on release.
+  const beginHold = () => {
+    if (busy || recState !== 'idle') return;
+    heldRef.current = true;
+    void startRecording();
+  };
+  const endHold = () => {
+    if (!heldRef.current) return;
+    heldRef.current = false;
+    void stopRecording();
   };
 
   // Abort any in-flight recording if the composer unmounts.
@@ -140,36 +146,10 @@ export function Composer({
   }, []);
 
   const iconBtn =
-    'focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink';
+    'focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-soft transition-[color,background-color,transform] hover:bg-surface-2 hover:text-ink active:scale-90';
 
   return (
     <div className="glass rounded-[1.75rem] border border-border p-2 shadow-lift transition-colors focus-within:border-primary/45">
-      {/* Attachment chip — present-but-not-uploaded. */}
-      <AnimatePresence initial={false}>
-        {attachment && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2, ease }}
-            className="overflow-hidden"
-          >
-            <div className="mx-1 mb-1.5 flex items-center gap-2 rounded-xl border border-border bg-surface-2/70 px-3 py-1.5 text-xs text-ink-soft">
-              <Paperclip className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-              <span className="min-w-0 flex-1 truncate">{attachment}</span>
-              <button
-                type="button"
-                onClick={() => setAttachment(null)}
-                aria-label="Remove attachment"
-                className="focus-ring shrink-0 rounded-md p-0.5 text-ink-faint transition-colors hover:text-ink"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Voice status — recording / transcribing / inline notice. */}
       <AnimatePresence initial={false}>
         {(recState !== 'idle' || voiceNote) && (
@@ -187,7 +167,7 @@ export function Composer({
                     <span className="absolute inline-flex h-full w-full rounded-full bg-danger/60 motion-safe:animate-ping" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-danger" />
                   </span>
-                  <span className="min-w-0 flex-1">Listening… tap the mic to stop.</span>
+                  <span className="min-w-0 flex-1">Listening… release the mic to stop.</span>
                 </>
               ) : recState === 'transcribing' ? (
                 <>
@@ -214,25 +194,6 @@ export function Composer({
       </AnimatePresence>
 
       <div className="flex items-end gap-1">
-        {/* Attach (UI-only) */}
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          aria-label="Attach a file"
-          title="Attach a file"
-          className={iconBtn}
-        >
-          <Plus className="h-5 w-5" strokeWidth={2} />
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={onPickFile}
-          tabIndex={-1}
-          aria-hidden
-        />
-
         <textarea
           ref={ref}
           rows={1}
@@ -248,36 +209,40 @@ export function Composer({
           className="max-h-44 flex-1 resize-none self-center bg-transparent px-2 py-2.5 text-[0.95rem] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none"
         />
 
-        {/* Mic — tap to record, tap again to transcribe into the input.
-            Hidden while an answer is streaming. */}
+        {/* Mic — PUSH TO TALK: hold to record, release to transcribe into the
+            input. Hidden while an answer is streaming. */}
         {!busy &&
-          (recState === 'recording' ? (
-            <button
-              type="button"
-              onClick={() => void stopRecording()}
-              aria-label="Stop recording"
-              title="Stop recording"
-              className="focus-ring relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25"
-            >
-              <span
-                aria-hidden
-                className="absolute inset-0 rounded-full bg-danger/25 motion-safe:animate-ping"
-              />
-              <Square className="relative h-4 w-4 fill-current" />
-            </button>
-          ) : recState === 'transcribing' ? (
+          (recState === 'transcribing' ? (
             <div className={`${iconBtn} pointer-events-none`} role="status" aria-label="Transcribing">
               <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />
             </div>
           ) : (
             <button
               type="button"
-              onClick={() => void startRecording()}
-              aria-label="Voice input"
-              title="Voice input"
-              className={iconBtn}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                beginHold();
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                endHold();
+              }}
+              onPointerCancel={endHold}
+              onContextMenu={(e) => e.preventDefault()}
+              aria-label="Hold to talk"
+              aria-pressed={recState === 'recording'}
+              title="Hold to talk"
+              className={
+                recState === 'recording'
+                  ? 'focus-ring relative flex h-10 w-10 shrink-0 select-none touch-none items-center justify-center rounded-full bg-danger/15 text-danger transition-colors'
+                  : `${iconBtn} select-none touch-none`
+              }
             >
-              <Mic className="h-5 w-5" strokeWidth={2} />
+              {recState === 'recording' && (
+                <span aria-hidden className="absolute inset-0 rounded-full bg-danger/25 motion-safe:animate-ping" />
+              )}
+              <Mic className="relative h-5 w-5" strokeWidth={2} />
             </button>
           ))}
 
@@ -303,9 +268,12 @@ export function Composer({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.6 }}
                 transition={{ duration: 0.18, ease }}
-                className="focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-[hsl(var(--primary-ink))] shadow-soft transition-[filter,transform] hover:brightness-110 active:scale-95"
+                className="group focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-[hsl(var(--primary-ink))] shadow-soft transition-[filter,transform] hover:brightness-110 active:scale-95"
               >
-                <ArrowUp className="h-5 w-5" strokeWidth={2} />
+                <ArrowUp
+                  className="h-5 w-5 transition-transform duration-300 ease-spring group-hover:-translate-y-0.5"
+                  strokeWidth={2}
+                />
               </motion.button>
             )}
           </AnimatePresence>

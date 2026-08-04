@@ -1,5 +1,6 @@
 include:
   - ./docker-compose-base.yml
+  - ./docker-compose.limits.yml   # memory ceilings + ES heap cap + log rotation (OOM fix)
 # To ensure that the container processes the locally modified `service_conf.yaml.template` instead of the one included in its image, you need to mount the local `service_conf.yaml.template` to the container.
 services:
   ragflow-cpu:
@@ -52,6 +53,13 @@ services:
       - ./entrypoint.sh:/ragflow/entrypoint.sh
       - ./brand/logo.svg:/ragflow/web/dist/logo.svg
       - ./brand/index.html:/ragflow/web/dist/index.html
+      # UI brand text: "RAGFlow" -> "IB_Chatbot" on the login + welcome headings.
+      # These are RAGFlow's built JS chunks with only the visible children:"RAGFlow"
+      # display literal changed. NOTE: filenames are content-hashed — after a
+      # RAGFlow image upgrade the hashes change and these mounts must be re-created
+      # from the new chunks (see docker/brand/README or re-run the patch).
+      - ./brand/index-CF1gDBKI.js:/ragflow/web/dist/chunk/js/index-CF1gDBKI.js
+      - ./brand/index-bdttGeAW.js:/ragflow/web/dist/chunk/js/index-bdttGeAW.js
     env_file: .env
     networks:
       - ragflow

@@ -15,6 +15,28 @@
 */
 @layer base {
   :root {
+    /*
+      UI config defaults — mirrored from src/lib/ui-config.ts, which overrides
+      these at startup via applyUiConfig(). Edit the knobs THERE, not here.
+        --ui-motion-scale : global animation-speed multiplier (1 = stock).
+        --font-sans       : base UI/body font family.
+        --font-display    : headings / brand font family.
+      Two derived durations let CSS-driven motion scale with the knob.
+    */
+    --ui-motion-scale: 1;
+    --ui-dur-fast: calc(0.16s * var(--ui-motion-scale));
+    --ui-dur: calc(0.3s * var(--ui-motion-scale));
+    --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', ui-sans-serif,
+      system-ui, sans-serif;
+
+    /*
+      Live viewport height — set to window.visualViewport.height by the
+      use-app-height hook so the shell tracks the on-screen keyboard on mobile.
+      Falls back to 100dvh before the hook runs / where unsupported.
+    */
+    --app-height: 100dvh;
+
     --bg: 42 33% 96%;
     --bg-2: 40 26% 93%;
     --surface: 40 50% 99%;
@@ -116,6 +138,24 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overscroll-behavior: none;
+    /* The app owns its own scroll containers — the page itself never scrolls,
+       which keeps the mobile keyboard from shoving the whole layout up. */
+    overflow: hidden;
+  }
+
+  /*
+    Keyboard-aware full-height utilities. `--app-height` tracks the visible
+    viewport (visualViewport.height) so the shell shrinks to sit above the
+    on-screen keyboard instead of being scrolled out of view. The plain 100dvh
+    line is the pre-hook / unsupported fallback.
+  */
+  .h-app {
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
+  }
+  .min-h-app {
+    min-height: 100dvh;
+    min-height: var(--app-height, 100dvh);
   }
 
   ::selection {
@@ -236,7 +276,24 @@
     z-index: 1;
   }
   ::view-transition-new(root) {
-    animation: vt-theme-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: vt-theme-reveal calc(0.5s * var(--ui-motion-scale)) cubic-bezier(0.22, 1, 0.36, 1);
     z-index: 9999;
+  }
+}
+
+/*
+  Reduced-motion baseline. framer-motion is handled separately via
+  <MotionConfig reducedMotion="user">; this tames CSS transitions, looping
+  keyframe animations (aurora / breathe / ping) and smooth scrolling so the app
+  settles instantly for users who ask for less motion.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

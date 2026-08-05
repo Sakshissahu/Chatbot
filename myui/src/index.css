@@ -7,10 +7,10 @@
 @tailwind utilities;
 
 /*
-  Design system: "Cultivated Intelligence"
-  - Constant IB forest-green brand identity; deep green (--primary) drives
-    primary actions, warm gold (--accent) is the secondary accent / glow.
-  - Light = warm paper with navy ink; Dark = Gemini-style neutral near-black.
+  Design system: "Chatbot"
+  - Indigo brand identity; periwinkle indigo (--primary) drives primary
+    actions and doubles as the secondary accent / glow (--accent).
+  - Light = warm paper with navy ink; Dark = neutral near-black.
   All colors are HSL channels so Tailwind can apply alpha.
 */
 @layer base {
@@ -50,26 +50,25 @@
     --border: 40 17% 85%;
     --shadow: 220 38% 18%;
 
-    --brand: 150 58% 24%;
-    --brand-soft: 150 38% 90%;
+    --brand: 239 84% 60%;
+    --brand-soft: 239 80% 94%;
 
-    /* primary action — deep IB forest green (~#15703C), same in both themes */
-    --primary: 150 66% 26%;
-    --primary-ink: 40 40% 98%;
+    /* primary action — periwinkle indigo (~#6366F1), same in both themes */
+    --primary: 239 84% 66%;
+    --primary-ink: 0 0% 100%;
 
-    /* secondary accent / glow — warm harvest gold (overridden per role) */
-    --accent: 36 74% 46%;
-    --accent-soft: 40 80% 90%;
-    --accent-ink: 40 60% 99%;
+    /* secondary accent / glow — same indigo family */
+    --accent: 239 84% 63%;
+    --accent-soft: 239 80% 94%;
+    --accent-ink: 0 0% 100%;
 
     --danger: 4 64% 48%;
   }
 
   /*
-    Dark = Gemini-style neutral near-black (main #0D0D0F, sidebar #0A0A0B),
-    not the old green loam. Only a faint cool tint remains; surfaces layer up
-    by lightness for depth. IB green (brand/primary) and gold (accent/glow)
-    stay vivid so they pop against the near-black.
+    Dark = neutral near-black (main #0D0D0F, sidebar #0A0A0B). Only a faint
+    cool tint remains; surfaces layer up by lightness for depth. Indigo
+    (brand/primary/accent) stays vivid so it pops against the near-black.
   */
   .dark {
     --bg: 240 7% 5%; /* #0D0D0F — main chat */
@@ -84,42 +83,42 @@
     --border: 240 6% 16%;
     --shadow: 240 50% 1%;
 
-    --brand: 150 48% 54%;
-    --brand-soft: 150 30% 20%;
+    --brand: 239 90% 74%;
+    --brand-soft: 239 45% 26%;
 
-    --primary: 150 66% 26%;
-    --primary-ink: 40 40% 98%;
+    --primary: 239 84% 66%;
+    --primary-ink: 0 0% 100%;
 
-    --accent: 44 92% 62%;
-    --accent-soft: 40 35% 20%;
-    --accent-ink: 40 55% 9%;
+    --accent: 239 90% 72%;
+    --accent-soft: 239 45% 26%;
+    --accent-ink: 240 55% 9%;
 
     --danger: 6 74% 67%;
   }
 
   /* Role accents */
   [data-role='farmer'] {
-    --accent: 36 74% 46%;
-    --accent-soft: 40 80% 90%;
-    --accent-ink: 40 60% 99%;
+    --accent: 239 84% 63%;
+    --accent-soft: 239 80% 94%;
+    --accent-ink: 0 0% 100%;
   }
   [data-role='farmer'].dark,
   .dark [data-role='farmer'] {
-    --accent: 38 88% 62%;
-    --accent-soft: 36 35% 24%;
-    --accent-ink: 36 55% 9%;
+    --accent: 239 90% 72%;
+    --accent-soft: 239 45% 26%;
+    --accent-ink: 240 55% 9%;
   }
 
   [data-role='employee'] {
-    --accent: 188 62% 34%;
-    --accent-soft: 188 50% 90%;
-    --accent-ink: 190 60% 99%;
+    --accent: 239 84% 63%;
+    --accent-soft: 239 80% 94%;
+    --accent-ink: 0 0% 100%;
   }
   [data-role='employee'].dark,
   .dark [data-role='employee'] {
-    --accent: 186 66% 58%;
-    --accent-soft: 188 28% 22%;
-    --accent-ink: 190 55% 8%;
+    --accent: 239 90% 72%;
+    --accent-soft: 239 45% 26%;
+    --accent-ink: 240 55% 9%;
   }
 
   * {

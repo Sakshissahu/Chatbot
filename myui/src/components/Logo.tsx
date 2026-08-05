@@ -1,5 +1,5 @@
+import { MessagesSquare } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import logoUrl from '@/assets/ibg-logo.png';
 
 interface LogoProps {
   className?: string;
@@ -8,19 +8,19 @@ interface LogoProps {
   onClick?: () => void;
 }
 
-/** IB Chicken Bot badge mark, optionally paired with the wordmark; optionally a Home button. */
+/** Chatbot badge mark, optionally paired with the wordmark; optionally a Home button. */
 export function Logo({ className, showWord = true, onClick }: LogoProps) {
   const mark = (
     <>
-      <img
-        src={logoUrl}
-        alt="IB Chicken Bot"
-        draggable={false}
-        className="h-10 w-10 shrink-0 select-none object-contain"
-      />
+      <span
+        aria-hidden
+        className="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-xl bg-primary text-primary-ink shadow-soft"
+      >
+        <MessagesSquare className="h-5 w-5" strokeWidth={2.25} />
+      </span>
       {showWord && (
         <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
-          IB Chicken Bot
+          Chatbot
         </span>
       )}
     </>

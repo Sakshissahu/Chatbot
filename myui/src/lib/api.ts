@@ -1,5 +1,5 @@
 /*
-  Client for the IB Group chat backend (the BFF), not RAGFlow directly.
+  Client for the chatbot backend (the BFF), not RAGFlow directly.
 
   The backend logs every Q&A to Postgres and proxies RAGFlow's SSE stream
   through to us *verbatim* — so the frame shape below is identical to what

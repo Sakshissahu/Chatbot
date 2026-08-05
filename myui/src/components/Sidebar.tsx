@@ -155,7 +155,7 @@ function SidebarFull({
 
   return (
     <div className="flex h-full flex-col" style={{ width: variant === 'desktop' ? FULL_W : '100%' }}>
-      {/* Header — IB Chicken Bot brand lockup + collapse control. Desktop only:
+      {/* Header — Chatbot brand lockup + collapse control. Desktop only:
           on mobile the persistent top bar provides the brand and the close
           (hamburger→X) control, so the drawer needs no header of its own. */}
       {variant === 'desktop' && (
@@ -163,7 +163,7 @@ function SidebarFull({
           <div className="flex items-center gap-2.5 pl-1">
             <Logo showWord={false} />
             <span className="display text-[1.05rem] font-semibold tracking-tight text-ink">
-              IB Chicken Bot
+              Chatbot
             </span>
           </div>
           <button

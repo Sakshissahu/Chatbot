@@ -1,9 +1,9 @@
 {
-  "name": "ib-group-chat-backend",
+  "name": "chatbot-backend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "BFF between the IB Group brand UI and RAGFlow. Logs every Q&A to Postgres and persists chat history.",
+  "description": "BFF between the Chatbot UI and RAGFlow. Logs every Q&A to Postgres and persists chat history.",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

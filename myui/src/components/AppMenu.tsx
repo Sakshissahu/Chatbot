@@ -28,7 +28,7 @@ const DETAILS: Record<AppMenuItem, { title: string; body: string }> = {
   },
   about: {
     title: 'About',
-    body: 'IB Chicken Bot is an internal knowledge assistant from IB Group.',
+    body: 'Chatbot is an internal knowledge assistant.',
   },
 };
 

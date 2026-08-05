@@ -22,7 +22,7 @@ export const ROLES: Record<RoleId, RoleConfig> = {
     label: 'Farmer',
     icon: Sprout,
     tagline: 'Field & flock guidance',
-    blurb: 'Crop care, poultry health, biosecurity and on-farm best practice — grounded in IB Group field documentation.',
+    blurb: 'Crop care, poultry health, biosecurity and on-farm best practice — grounded in field documentation.',
     corpus: 'Farmer field docs',
     suggestions: [
       'What biosecurity measures are recommended for poultry sheds?',

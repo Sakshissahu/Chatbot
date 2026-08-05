@@ -37,7 +37,7 @@ export function LoginScreen() {
 
   const nameError = touched && !name.trim();
 
-  // Shared with the new app fields (see Composer): green focus border, no gold.
+  // Shared with the new app fields (see Composer): indigo focus border.
   const fieldClass =
     'flex items-center gap-2.5 rounded-2xl border bg-bg-2/60 px-3.5 transition-colors focus-within:border-primary/45';
 
@@ -69,7 +69,7 @@ export function LoginScreen() {
                 Welcome back
               </h1>
               <p className="mt-1.5 text-[0.95rem] leading-relaxed text-ink-soft">
-                Sign in to reach IB Chicken Bot.
+                Sign in to access the chatbot.
               </p>
             </div>
 
@@ -121,7 +121,7 @@ export function LoginScreen() {
                 </div>
               </div>
 
-              {/* Remember me — neutral box, IB-green when checked (no gold), to
+              {/* Remember me — neutral box, indigo when checked, to
                   match the inputs above and the button below. Default off, so
                   the token lands in sessionStorage and clears on browser close;
                   checking it persists to localStorage. */}
@@ -171,14 +171,14 @@ export function LoginScreen() {
 }
 
 /**
- * Soft brand glow behind the login card — the SAME green-core + warm-gold bloom
- * used on the chat home (HomeGlow), centered behind the form. CSS-only, so it
+ * Soft brand glow behind the login card — the SAME indigo bloom used on the
+ * chat home (HomeGlow), centered behind the form. CSS-only, so it
  * stays light and matches the home-state look (no aurora drift / grid texture).
  */
 function LoginGlow() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* green core, centered */}
+      {/* brand core, centered */}
       <div
         className="absolute left-1/2 top-1/2 h-[620px] w-[620px] max-w-[150vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-70 blur-[90px]"
         style={{
@@ -186,7 +186,7 @@ function LoginGlow() {
             'radial-gradient(circle, hsl(var(--brand) / 0.45) 0%, hsl(var(--brand) / 0.16) 40%, transparent 70%)',
         }}
       />
-      {/* warm gold bloom, offset above */}
+      {/* accent bloom, offset above */}
       <div
         className="absolute left-1/2 top-[34%] h-[460px] w-[560px] max-w-[140vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-60 blur-[80px]"
         style={{

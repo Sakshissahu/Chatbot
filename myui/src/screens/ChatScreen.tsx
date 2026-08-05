@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { AlertTriangle, ArrowDown } from 'lucide-react';
+import { AlertTriangle, ArrowDown, MessagesSquare } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { SettingsModal } from '@/components/SettingsModal';
 import { AppMenu } from '@/components/AppMenu';
@@ -12,7 +12,6 @@ import { useNav } from '@/lib/nav';
 import { useAuth } from '@/lib/auth';
 import { useBackButton } from '@/lib/use-back-button';
 import { type RoleId } from '@/lib/roles';
-import logoUrl from '@/assets/ibg-logo.png';
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -20,8 +19,8 @@ const ease = [0.22, 1, 0.36, 1] as const;
 const NEAR_BOTTOM_PX = 160;
 
 /** Product/bot name — shown in the phone top bar (and matches the sidebar header). */
-const BOT_NAME = 'IB Chicken Bot';
-const COMPOSER_PLACEHOLDER = 'Ask IB chicken bot…';
+const BOT_NAME = 'Chatbot';
+const COMPOSER_PLACEHOLDER = 'Ask the chatbot…';
 
 export function ChatScreen({ roleId }: { roleId: RoleId }) {
   const { user } = useAuth();
@@ -330,21 +329,21 @@ function HomeView({
       <HomeGlow />
 
       {/* Greeting (+ the desktop composer) — vertically centered as a group,
-          with the IB Group mark sitting just above it (home/empty state only).
+          with the brand mark sitting just above it (home/empty state only).
           `overflow-y-auto` + `my-auto` keep it centered when there's room but let
           it scroll instead of clipping when the mobile keyboard squeezes the
           visible viewport. */}
       <div className="relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-4 py-6 sm:py-10">
         <div className="my-auto flex w-full max-w-2xl flex-col items-center">
-          <motion.img
-            src={logoUrl}
-            alt="IB Group"
-            draggable={false}
+          <motion.span
+            aria-hidden
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.55, ease }}
-            className="mb-5 h-14 w-14 select-none object-contain sm:h-16 sm:w-16"
-          />
+            className="mb-5 flex h-14 w-14 select-none items-center justify-center rounded-2xl bg-primary text-primary-ink shadow-soft sm:h-16 sm:w-16"
+          >
+            <MessagesSquare className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={2.25} />
+          </motion.span>
           <motion.h1
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
@@ -382,14 +381,14 @@ function HomeView({
 }
 
 /**
- * Soft radial glow behind the home composer — IB forest-green + warm gold
- * bleeding into the page. CSS-only (reliable on low-end devices); rendered only
- * in the home state, so it disappears the moment a conversation starts.
+ * Soft radial glow behind the home composer — indigo brand light bleeding into
+ * the page. CSS-only (reliable on low-end devices); rendered only in the home
+ * state, so it disappears the moment a conversation starts.
  */
 function HomeGlow() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* green core, centered behind the composer */}
+      {/* brand core, centered behind the composer */}
       <div
         className="absolute left-1/2 top-[56%] h-[620px] w-[620px] max-w-[150vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-70 blur-[90px]"
         style={{
@@ -397,7 +396,7 @@ function HomeGlow() {
             'radial-gradient(circle, hsl(var(--brand) / 0.45) 0%, hsl(var(--brand) / 0.16) 40%, transparent 70%)',
         }}
       />
-      {/* warm gold bloom, offset above */}
+      {/* accent bloom, offset above */}
       <div
         className="absolute left-1/2 top-[38%] h-[460px] w-[560px] max-w-[140vw] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-60 blur-[80px]"
         style={{

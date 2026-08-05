@@ -1,4 +1,4 @@
-# IB Group Chat — Local Run Guide
+# Chatbot  — Local Run Guide
 
 How to bring the full stack up locally to review or develop the project. The
 frontend (`myui`) is a static Vite build; the backend (`myui-backend`) is a BFF

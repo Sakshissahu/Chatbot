@@ -53,13 +53,17 @@ services:
       - ./entrypoint.sh:/ragflow/entrypoint.sh
       - ./brand/logo.svg:/ragflow/web/dist/logo.svg
       - ./brand/index.html:/ragflow/web/dist/index.html
-      # UI brand text: "RAGFlow" -> "IB_Chatbot" on the login + welcome headings.
+      # UI brand text: "RAGFlow" -> "Chatbot" on the login + welcome headings.
       # These are RAGFlow's built JS chunks with only the visible children:"RAGFlow"
       # display literal changed. NOTE: filenames are content-hashed — after a
       # RAGFlow image upgrade the hashes change and these mounts must be re-created
       # from the new chunks (see docker/brand/README or re-run the patch).
       - ./brand/index-CF1gDBKI.js:/ragflow/web/dist/chunk/js/index-CF1gDBKI.js
       - ./brand/index-bdttGeAW.js:/ragflow/web/dist/chunk/js/index-bdttGeAW.js
+      # Admin UI theme recolor: RAGFlow's brand hexes (teal #00beb4, violet
+      # #7561ff, blue #1677ff, gradient cyans) remapped to indigo (#6366F1) so the
+      # admin matches the chatbot. Same content-hash caveat as the chunks above.
+      - ./brand/index-BGKhff_m.css:/ragflow/web/dist/assets/css/index-BGKhff_m.css
     env_file: .env
     networks:
       - ragflow
